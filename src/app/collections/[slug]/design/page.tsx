@@ -135,6 +135,51 @@ export default function CollectionDesignPage() {
   const [focusX, setFocusX] = useState(50)
   const [focusY, setFocusY] = useState(50)
 
+const fetchCollection = useCallback(async () => {
+    try {
+      setLoading(true)
+      const token = localStorage.getItem('auth-token')
+
+      const response = await fetch(`/api/collections/${slug}`, {
+        credentials: 'include',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch collection')
+      }
+
+      const data = await response.json()
+      console.log('📂 Collection data loaded:', data.collection)
+      setCollection(data.collection)
+      setPhotos(data.photos || [])
+
+      // Load existing design settings
+      const design = data.collection.design
+      if (design) {
+        console.log('🎨 Loading existing design settings:', design)
+        setSelectedLayout(design.coverLayout || 'center')
+        setTitleFont(design.typography?.titleFont || 'Playfair Display')
+        setTitleSize(design.typography?.titleSize || 48)
+        setTitleColor(design.typography?.titleColor || '#ffffff')
+        setBackgroundColor(design.colors?.background || '#ffffff')
+        setAccentColor(design.colors?.accent || '#000000')
+        setGridColumns(design.grid?.columns || 4)
+        setGridSpacing(design.grid?.spacing || 12)
+        setFocusX(design.coverFocus?.x || 50)
+        setFocusY(design.coverFocus?.y || 50)
+      }
+
+    } catch (error) {
+      console.error('Error fetching collection:', error)
+    } finally {
+      setLoading(false)
+    }
+  }, [slug, setLoading, setCollection, setPhotos, setSelectedLayout, setTitleFont, setTitleSize, setTitleColor, setBackgroundColor, setAccentColor, setGridColumns, setGridSpacing, setFocusX, setFocusY]);
+
   useEffect(() => {
     if (params.slug) {
       fetchCollection()
@@ -211,50 +256,7 @@ export default function CollectionDesignPage() {
     }
   }, [autoSave, saveDesign, collection])
 
-  const fetchCollection = useCallback(async () => {
-    try {
-      setLoading(true)
-      const token = localStorage.getItem('auth-token')
-
-      const response = await fetch(`/api/collections/${slug}`, {
-        credentials: 'include',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch collection')
-      }
-
-      const data = await response.json()
-      console.log('📂 Collection data loaded:', data.collection)
-      setCollection(data.collection)
-      setPhotos(data.photos || [])
-
-      // Load existing design settings
-      const design = data.collection.design
-      if (design) {
-        console.log('🎨 Loading existing design settings:', design)
-        setSelectedLayout(design.coverLayout || 'center')
-        setTitleFont(design.typography?.titleFont || 'Playfair Display')
-        setTitleSize(design.typography?.titleSize || 48)
-        setTitleColor(design.typography?.titleColor || '#ffffff')
-        setBackgroundColor(design.colors?.background || '#ffffff')
-        setAccentColor(design.colors?.accent || '#000000')
-        setGridColumns(design.grid?.columns || 4)
-        setGridSpacing(design.grid?.spacing || 12)
-        setFocusX(design.coverFocus?.x || 50)
-        setFocusY(design.coverFocus?.y || 50)
-      }
-
-    } catch (error) {
-      console.error('Error fetching collection:', error)
-    } finally {
-      setLoading(false)
-    }
-  }, [slug, setLoading, setCollection, setPhotos, setSelectedLayout, setTitleFont, setTitleSize, setTitleColor, setBackgroundColor, setAccentColor, setGridColumns, setGridSpacing, setFocusX, setFocusY]);
+  
 
   const generateShareUrl = async () => {
     if (!collection) return

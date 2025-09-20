@@ -96,39 +96,75 @@ export function PhotoUpload({
 
   // MOVER uploadFile AQUÍ DENTRO
   const uploadFile = async (file: File) => {
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('collectionId', collectionId)
+  console.log('uploadFile called for', file.name)
 
-    const response = await fetch('/api/upload', {
-      method: 'POST',
-      body: formData,
-    })
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('collectionId', collectionId)
 
-    if (!response.ok) {
-      throw new Error(`Upload failed: ${response.statusText}`)
-    }
+  const response = await fetch('/api/photos/upload', {
+    method: 'POST',
+    body: formData,
+  })
 
-    return await response.json()
+  console.log('Upload response status:', response.status)
+
+  if (!response.ok) {
+    throw new Error(`Upload failed: ${response.statusText}`)
   }
+
+  const result = await response.json()
+  console.log('Upload result:', result)
+
+  return result
+}
 
   // EL RESTO DE TU CÓDIGO ACTUAL PERMANECE IGUAL
   const fileArray = Array.from(files)
   for (const file of fileArray) {
-    const fileId = `${file.name}-${Date.now()}`
-    const validationError = validateFile(file)
-    if (validationError) {
-      setUploads(prev => new Map(prev.set(fileId, {
-        filename: file.name,
-        progress: 0,
-        status: 'error',
-        error: validationError
-      })))
-      onUploadError?.(validationError)
-      continue
-    }
-    // resto de tu código actual...
+  const fileId = `${file.name}-${Date.now()}`
+  const validationError = validateFile(file)
+  if (validationError) {
+    setUploads(prev => new Map(prev.set(fileId, {
+      filename: file.name,
+      progress: 0,
+      status: 'error',
+      error: validationError
+    })))
+    onUploadError?.(validationError)
+    continue
   }
+
+  // Agregamos el estado inicial de subida
+  setUploads(prev => new Map(prev.set(fileId, {
+    filename: file.name,
+    progress: 0,
+    status: 'uploading'
+  })))
+
+  try {
+    const result = await uploadFile(file)
+
+    // Actualizamos el estado cuando se completa
+    setUploads(prev => new Map(prev.set(fileId, {
+      filename: file.name,
+      progress: 100,
+      status: 'completed',
+      result
+    })))
+
+    onUploadComplete?.(result)
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Upload failed'
+    setUploads(prev => new Map(prev.set(fileId, {
+      filename: file.name,
+      progress: 0,
+      status: 'error',
+      error: errorMessage
+    })))
+    onUploadError?.(errorMessage)
+  }
+}
 }, [onUploadComplete, onUploadError, collectionId]) // REMOVER validateFile y uploadFile de las dependencias
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -156,6 +192,7 @@ export function PhotoUpload({
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (files) {
+		console.log('Files selected:', files)
       handleFiles(files)
     }
     // Reset input

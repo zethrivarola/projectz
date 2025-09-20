@@ -354,3 +354,9 @@ export async function POST(request: NextRequest) {
 // Configure to handle large file uploads
 export const runtime = 'nodejs'
 export const maxDuration = 60 // 60 seconds timeout
+export const config = {
+  api: {
+    bodyParser: false,
+    sizeLimit: '100mb', // Ajusta según tu necesidad
+  },
+}

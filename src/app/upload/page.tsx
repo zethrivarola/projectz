@@ -56,17 +56,7 @@ export default function UploadPage() {
 
   const collectionId = searchParams.get('collection')
 
-  useEffect(() => {
-    if (!collectionId) {
-      setError('No collection specified. Please select a collection first.')
-      setLoading(false)
-      return
-    }
-
-    fetchCollection()
-  }, [collectionId, fetchCollection])
-
-  const fetchCollection = useCallback(async () => {
+const fetchCollection = useCallback(async () => {
     try {
       const token = localStorage.getItem('auth-token')
       const headers: HeadersInit = {
@@ -101,6 +91,18 @@ export default function UploadPage() {
       setLoading(false)
     }
   }, [collectionId, setCollection, setError, setLoading]);
+
+  useEffect(() => {
+    if (!collectionId) {
+      setError('No collection specified. Please select a collection first.')
+      setLoading(false)
+      return
+    }
+
+    fetchCollection()
+  }, [collectionId, fetchCollection])
+
+  
 
   const handleUploadComplete = (uploadedPhoto: UploadedPhoto) => {
     setUploadedPhotos(prev => [...prev, uploadedPhoto])

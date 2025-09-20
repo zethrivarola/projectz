@@ -1,19 +1,25 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Paquetes externos que Next.js no debe empaquetar
   serverExternalPackages: ['sharp'],
+
+  // Salida standalone
   output: 'standalone',
+
+  // Carpeta de compilación
   distDir: '.next',
-  experimental: {
-    serverComponentsExternalPackages: ['sharp'],
-    turbo: {
-      rules: {
-        '*.svg': {
-          loaders: ['@svgr/webpack'],
-          as: '*.js',
-        },
+
+  // Configuración de Turbopack
+  turbopack: {
+    rules: {
+      '*.svg': {
+        loaders: ['@svgr/webpack'],
+        as: '*.js',
       },
     },
   },
+
+  // Configuración de imágenes
   images: {
     remotePatterns: [
       {
@@ -29,6 +35,8 @@ const nextConfig = {
       },
     ],
   },
+
+  // Reescrituras de rutas
   async rewrites() {
     return [
       {
@@ -37,16 +45,25 @@ const nextConfig = {
       },
     ]
   },
-  // Configuración para producción
+
+  // Configuración general
   compress: true,
   poweredByHeader: false,
   generateEtags: true,
-  // ESLint configuration
+
+  // ESLint
   eslint: {
     ignoreDuringBuilds: false,
   },
+
+  // TypeScript
   typescript: {
     ignoreBuildErrors: false,
+  },
+
+  // Configuración experimental para permitir subir archivos grandes
+  experimental: {
+    serverActionsBodySizeLimit: '100mb',
   },
 }
 

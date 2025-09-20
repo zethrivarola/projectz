@@ -63,13 +63,7 @@ export default function CollectionPreviewPage() {
   const [photos, setPhotos] = useState<Photo[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    if (params.slug) {
-      fetchCollection()
-    }
-  }, [params.slug, fetchCollection])
-
-  const fetchCollection = useCallback(async () => {
+const fetchCollection = useCallback(async () => {
     try {
       setLoading(true)
       const token = localStorage.getItem('auth-token')
@@ -96,6 +90,14 @@ export default function CollectionPreviewPage() {
       setLoading(false)
     }
   }, [slug, setLoading, setCollection, setPhotos]);
+
+  useEffect(() => {
+    if (params.slug) {
+      fetchCollection()
+    }
+  }, [params.slug, fetchCollection])
+
+  
 
   if (loading) {
     return (

@@ -92,12 +92,63 @@ export default function PublicGalleryPage() {
   const [showFavorites, setShowFavorites] = useState(false)
   const [downloadingFavorites, setDownloadingFavorites] = useState(false)
 
+const fetchGallery =  useCallback(async () => { 
+    try {
+      setLoading(true)
+      setError('')
+
+      const response = await fetch(`/api/gallery/${token}`)
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          const data = await response.json()
+          if (data.requiresPassword) {
+            setShowPasswordDialog(true)
+            return
+          }
+        }
+        throw new Error('Gallery not found or access denied')
+      }
+
+      const data = await response.json()
+      setShareData(data)
+
+    } catch (error) {
+      console.error('Error fetching gallery:', error)
+      setError(error instanceof Error ? error.message : 'Failed to load gallery')
+    } finally {
+      setLoading(false)
+    }
+  }, [token, setLoading, setError, setShowPasswordDialog, setShareData]);
+
+const loadFavorites = useCallback(() => {
+    try {
+      const stored = localStorage.getItem(`favorites_${token}`)
+      if (stored) {
+        setFavorites(new Set(JSON.parse(stored)))
+      }
+    } catch (error) {
+      console.error('Error loading favorites:', error)
+    }
+  }, [token, setFavorites]);
+
+const navigatePhoto = useCallback((direction: number) => {
+    if (!shareData) return
+    const newIndex = (currentPhotoIndex + direction + shareData.photos.length) % shareData.photos.length
+    setCurrentPhotoIndex(newIndex)
+    setSelectedPhoto(shareData.photos[newIndex])
+    setZoom(1)
+    setRotation(0)
+  }, [currentPhotoIndex, shareData])
+
   useEffect(() => {
     if (params.token) {
       fetchGallery()
       loadFavorites()
     }
   }, [params.token, fetchGallery, loadFavorites])
+
+
 
   // Keyboard navigation for lightbox
   useEffect(() => {
@@ -141,14 +192,7 @@ export default function PublicGalleryPage() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [selectedPhoto, shareData, navigatePhoto])
 
-  const navigatePhoto = useCallback((direction: number) => {
-    if (!shareData) return
-    const newIndex = (currentPhotoIndex + direction + shareData.photos.length) % shareData.photos.length
-    setCurrentPhotoIndex(newIndex)
-    setSelectedPhoto(shareData.photos[newIndex])
-    setZoom(1)
-    setRotation(0)
-  }, [currentPhotoIndex, shareData])
+  
 
   const handleCloseLightbox = () => {
     setSelectedPhoto(null)
@@ -157,16 +201,7 @@ export default function PublicGalleryPage() {
   }
 
   // Load favorites from localStorage
-  const loadFavorites = useCallback(() => {
-    try {
-      const stored = localStorage.getItem(`favorites_${token}`)
-      if (stored) {
-        setFavorites(new Set(JSON.parse(stored)))
-      }
-    } catch (error) {
-      console.error('Error loading favorites:', error)
-    }
-  }, [token, setFavorites]);
+  
 
   // Save favorites to localStorage
   const saveFavorites = (newFavorites: Set<string>) => {
@@ -177,34 +212,7 @@ export default function PublicGalleryPage() {
     }
   }
 
-  const fetchGallery =  useCallback(async () => { 
-    try {
-      setLoading(true)
-      setError('')
-
-      const response = await fetch(`/api/gallery/${token}`)
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          const data = await response.json()
-          if (data.requiresPassword) {
-            setShowPasswordDialog(true)
-            return
-          }
-        }
-        throw new Error('Gallery not found or access denied')
-      }
-
-      const data = await response.json()
-      setShareData(data)
-
-    } catch (error) {
-      console.error('Error fetching gallery:', error)
-      setError(error instanceof Error ? error.message : 'Failed to load gallery')
-    } finally {
-      setLoading(false)
-    }
-  }, [token, setLoading, setError, setShowPasswordDialog, setShareData]);
+  
 
   const handlePasswordSubmit = async () => {
     try {

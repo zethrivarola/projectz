@@ -73,6 +73,13 @@ export function PhotoGallery({
 
   const currentPhoto = photos[currentIndex]
 
+const navigateToNext = useCallback((direction: number) => {
+    const newIndex = (currentIndex + direction + photos.length) % photos.length
+    onNavigate(newIndex)
+    setZoom(1)
+    setRotation(0)
+  }, [currentIndex, photos.length, onNavigate])
+
   // Keyboard navigation
   useEffect(() => {
     if (!isOpen) return
@@ -120,12 +127,7 @@ export function PhotoGallery({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isOpen, showMetadata, onClose, navigateToNext])
 
-  const navigateToNext = useCallback((direction: number) => {
-    const newIndex = (currentIndex + direction + photos.length) % photos.length
-    onNavigate(newIndex)
-    setZoom(1)
-    setRotation(0)
-  }, [currentIndex, photos.length, onNavigate])
+  
 
   const resetView = () => {
     setZoom(1)

@@ -228,6 +228,10 @@ export async function DELETE(
 
     // Delete any associated share links
     const sharesMap = await storage.getShares()
+	
+	// Agregamos esto para inspeccionar un share real
+console.log('Ejemplo de share:', Array.from(sharesMap.values())[0])
+
     const collectionShares = Array.from(sharesMap.values())
       .filter(share => share.collectionId === collection.id) as Share[]
 

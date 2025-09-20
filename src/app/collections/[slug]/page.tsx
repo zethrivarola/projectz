@@ -144,11 +144,7 @@ export default function CollectionDetailPage() {
     return collection?.design || defaultDesign
   }
 
-  useEffect(() => {
-    if (params.slug) {
-      fetchCollection()
-    }
-  }, [params.slug, fetchCollection])
+  
 
   const getAuthHeaders = useCallback(() => {
   const token = localStorage.getItem('auth-token')
@@ -209,6 +205,12 @@ export default function CollectionDetailPage() {
     }
   }, [slug, router, setLoading, setError, setCollection, setPhotos, getAuthHeaders]);
 
+useEffect(() => {
+    if (params.slug) {
+      fetchCollection()
+    }
+  }, [params.slug, fetchCollection])
+  
   const handlePhotoClick = (photo: Photo) => {
     if (selectionMode) {
       togglePhotoSelection(photo.id)

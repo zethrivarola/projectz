@@ -96,6 +96,19 @@ export default function CollectionsPage() {
   const [showShareDialog, setShowShareDialog] = useState(false)
   const [selectedCollectionForShare, setSelectedCollectionForShare] = useState<Collection | null>(null)
 
+const getAuthHeaders = useCallback(() => {
+  const token = localStorage.getItem('auth-token')
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  }
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+
+  return headers
+}, [])
+
   // Filter state
   const [filters, setFilters] = useState<FilterState>({
     searchQuery: "",
@@ -112,6 +125,63 @@ export default function CollectionsPage() {
   const availableTags = Array.from(
     new Set(collections.flatMap(collection => collection.tags))
   ).filter(Boolean)
+
+const fetchCollections = useCallback(async () => {
+    try {
+        setLoading(true)
+        setError("")
+
+        console.log('Fetching collections...')
+
+        const authResponse = await fetch('/api/auth/me', {
+            credentials: 'include',
+            headers: getAuthHeaders()
+        })
+
+        console.log('Auth check response:', authResponse.status)
+
+        if (!authResponse.ok) {
+            console.log('Authentication failed, redirecting to login')
+            router.push('/login')
+            return
+        }
+
+        const authData = await authResponse.json()
+        console.log('Authentication verified for:', authData.user.email)
+        setAuthChecked(true)
+
+        const response = await fetch('/api/collections', {
+            credentials: 'include',
+            headers: getAuthHeaders()
+        })
+
+        console.log('Collections response status:', response.status)
+
+        if (response.status === 401) {
+            console.log('Collections API returned 401, redirecting to login')
+            router.push('/login')
+            return
+        }
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch collections (${response.status})`)
+        }
+
+        const data = await response.json()
+        setCollections(data.collections)
+        console.log('Collections loaded:', data.collections.length)
+
+    } catch (error) {
+        console.error('Error fetching collections:', error)
+        setError(error instanceof Error ? error.message : 'Failed to load collections')
+
+        if (error instanceof Error && !error.message.includes('401')) {
+            console.log('Network error detected, not redirecting to login')
+        }
+    } finally {
+        setLoading(false)
+    }
+}, [router, setLoading, setError, setAuthChecked, setCollections, getAuthHeaders]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -156,75 +226,9 @@ export default function CollectionsPage() {
     fetchCollections()
   }
 
-  const getAuthHeaders = useCallback(() => {
-  const token = localStorage.getItem('auth-token')
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-  }
+  
 
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`
-  }
-
-  return headers
-}, [])
-
-  const fetchCollections = useCallback(async () => {
-    try {
-      setLoading(true)
-      setError("")
-
-      console.log('Fetching collections...')
-
-      const authResponse = await fetch('/api/auth/me', {
-        credentials: 'include',
-        headers: getAuthHeaders()
-      })
-
-      console.log('Auth check response:', authResponse.status)
-
-      if (!authResponse.ok) {
-        console.log('Authentication failed, redirecting to login')
-        router.push('/login')
-        return
-      }
-
-      const authData = await authResponse.json()
-      console.log('Authentication verified for:', authData.user.email)
-      setAuthChecked(true)
-
-      const response = await fetch('/api/collections', {
-        credentials: 'include',
-        headers: getAuthHeaders()
-      })
-
-      console.log('Collections response status:', response.status)
-
-      if (response.status === 401) {
-        console.log('Collections API returned 401, redirecting to login')
-        router.push('/login')
-        return
-      }
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch collections (${response.status})`)
-      }
-
-      const data = await response.json()
-      setCollections(data.collections)
-      console.log('Collections loaded:', data.collections.length)
-
-    } catch (error) {
-      console.error('Error fetching collections:', error)
-      setError(error instanceof Error ? error.message : 'Failed to load collections')
-
-      if (error instanceof Error && !error.message.includes('401')) {
-        console.log('Network error detected, not redirecting to login')
-      }
-    } finally {
-      setLoading(false)
-    }
-  }, [router, setLoading, setError, setAuthChecked, setCollections, getAuthHeaders]);
+  
 
   const handleNewCollection = (newCollection: Collection) => {
     setCollections(prev => [newCollection, ...prev])

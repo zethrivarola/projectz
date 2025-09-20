@@ -87,11 +87,7 @@ export function ShareCollectionDialog({
   const visibility = watch('visibility')
 
   // Load existing share info when dialog opens
-  useEffect(() => {
-    if (open && collection.id) {
-      loadExistingShare()
-    }
-  }, [open, collection.id, loadExistingShare])
+  
 
   const loadExistingShare = useCallback(async () => {
     try {
@@ -106,6 +102,12 @@ export function ShareCollectionDialog({
       console.error('Error loading share info:', error)
     }
   }, [collection, setShareInfo]);
+
+useEffect(() => {
+    if (open && collection.id) {
+      loadExistingShare()
+    }
+  }, [open, collection.id, loadExistingShare])
 
   const generateShareUrl = (accessToken: string) => {
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
