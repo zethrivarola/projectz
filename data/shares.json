@@ -1,0 +1,29 @@
+[
+  {
+    "id": "a4deccd5-b51c-43a6-8a33-a3c1865afa8d",
+    "shareToken": "27ef6ffa-400f-46be-80de-6eb2bc31ec51",
+    "collectionId": "d95c02b9-61aa-409a-a63a-c0274710aafe",
+    "collectionSlug": "cumple-de-riki",
+    "visibility": "public",
+    "password": null,
+    "message": "",
+    "createdAt": "2025-09-18T12:58:42.645Z",
+    "createdBy": "user-1",
+    "accessCount": 2,
+    "lastAccessedAt": "2025-09-18T15:42:39.438Z"
+  },
+  {
+    "id": "34d8d7c8-206d-4011-b483-03ec8002b2bc",
+    "shareToken": "4f93a3f1-a2ba-4fc8-a7ed-efc3c24bb5eb",
+    "collectionId": "d95c02b9-61aa-409a-a63a-c0274710aafe",
+    "collectionSlug": "cumple-de-riki",
+    "visibility": "public",
+    "password": null,
+    "expiresAt": null,
+    "message": "",
+    "createdAt": "2025-09-19T02:06:23.556Z",
+    "createdBy": "user-1",
+    "accessCount": 1,
+    "lastAccessedAt": "2025-09-19T02:06:27.989Z"
+  }
+]

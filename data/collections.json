@@ -1,0 +1,43 @@
+[
+  {
+    "id": "d95c02b9-61aa-409a-a63a-c0274710aafe",
+    "title": "Cumple de Riki",
+    "description": "riki gay\n",
+    "slug": "cumple-de-riki",
+    "ownerId": "user-1",
+    "visibility": "private",
+    "passwordHash": null,
+    "isStarred": false,
+    "isFeatured": false,
+    "tags": [],
+    "dateTaken": null,
+    "createdAt": "2025-09-18T12:24:27.575Z",
+    "updatedAt": "2025-09-18T14:12:59.452Z",
+    "photoCount": 8,
+    "coverPhoto": {
+      "id": "f33b6b5c-6635-40c8-8eb1-172741af798e",
+      "thumbnailUrl": "/uploads/d95c02b9-61aa-409a-a63a-c0274710aafe/thumbnails/thumb_f33b6b5c-6635-40c8-8eb1-172741af798e.jpg",
+      "webUrl": "/uploads/d95c02b9-61aa-409a-a63a-c0274710aafe/web/web_f33b6b5c-6635-40c8-8eb1-172741af798e.jpg"
+    },
+    "design": {
+      "coverLayout": "center",
+      "typography": {
+        "titleFont": "Montserrat",
+        "titleSize": 80,
+        "titleColor": "#98bbe2"
+      },
+      "colors": {
+        "background": "#ffffff",
+        "accent": "#000000"
+      },
+      "grid": {
+        "columns": 4,
+        "spacing": 12
+      },
+      "coverFocus": {
+        "x": 50,
+        "y": 34
+      }
+    }
+  }
+]

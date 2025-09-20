@@ -1,0 +1,575 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  owner
+  admin
+  client
+}
+
+enum CollectionVisibility {
+  public
+  private
+  password_protected
+}
+
+enum ProcessingStatus {
+  pending
+  processing
+  completed
+  failed
+}
+
+enum DownloadResolution {
+  web
+  high_res
+  original
+}
+
+model User {
+  id                       String    @id @default(uuid())
+  email                    String    @unique
+  passwordHash             String    @map("password_hash")
+  firstName                String?   @map("first_name")
+  lastName                 String?   @map("last_name")
+  role                     UserRole  @default(client)
+  emailVerified            Boolean   @default(false) @map("email_verified")
+  emailVerificationToken   String?   @map("email_verification_token")
+  passwordResetToken       String?   @map("password_reset_token")
+  passwordResetExpires     DateTime? @map("password_reset_expires")
+  avatarUrl                String?   @map("avatar_url")
+  createdAt                DateTime  @default(now()) @map("created_at")
+  updatedAt                DateTime  @updatedAt @map("updated_at")
+  lastLogin                DateTime? @map("last_login")
+
+  // Relations
+  collections        Collection[]
+  watermarks         Watermark[]
+  collectionPresets  CollectionPreset[]
+  lightroomPresets   LightroomPreset[]
+  collectionShares   CollectionShare[]
+  emailTemplates     EmailTemplate[]
+  globalSettings     GlobalSetting[]
+  userSessions       UserSession[]
+  batchJobs          BatchJob[]
+  processingPresets  ProcessingPreset[]
+  enhancedShareLinks EnhancedShareLink[]
+  selectionSessions  SelectionSession[]
+  photoSelections    PhotoSelection[]
+
+  @@map("users")
+}
+
+model Collection {
+  id                        String               @id @default(uuid())
+  ownerId                   String               @map("owner_id")
+  title                     String
+  description               String?
+  slug                      String               @unique
+  coverPhotoId              String?              @map("cover_photo_id")
+  coverFocalPoint           Json?                @map("cover_focal_point")
+  visibility                CollectionVisibility @default(private)
+  passwordHash              String?              @map("password_hash")
+  isStarred                 Boolean              @default(false) @map("is_starred")
+  isFeatured                Boolean              @default(false) @map("is_featured")
+  dateTaken                 DateTime?            @map("date_taken")
+  tags                      String[]
+  backgroundMusicUrl        String?              @map("background_music_url")
+  autoExpiry                DateTime?            @map("auto_expiry")
+  downloadsEnabled          Boolean              @default(true) @map("downloads_enabled")
+  favoritesEnabled          Boolean              @default(true) @map("favorites_enabled")
+  commentsEnabled           Boolean              @default(false) @map("comments_enabled")
+  slideshowEnabled          Boolean              @default(true) @map("slideshow_enabled")
+  socialSharingEnabled      Boolean              @default(false) @map("social_sharing_enabled")
+  emailRegistrationRequired Boolean              @default(false) @map("email_registration_required")
+  galleryAssistEnabled      Boolean              @default(false) @map("gallery_assist_enabled")
+  watermarkId               String?              @map("watermark_id")
+  gridStyle                 String               @default("vertical") @map("grid_style")
+  thumbnailSize             String               @default("regular") @map("thumbnail_size")
+  gridSpacing               String               @default("regular") @map("grid_spacing")
+  navigationStyle           String               @default("icons") @map("navigation_style")
+  typographyStyle           String               @default("sans") @map("typography_style")
+  colorTheme                String               @default("light") @map("color_theme")
+  createdAt                 DateTime             @default(now()) @map("created_at")
+  updatedAt                 DateTime             @updatedAt @map("updated_at")
+
+  // Relations
+  owner            User                  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  coverPhoto       Photo?                @relation("CollectionCoverPhoto", fields: [coverPhotoId], references: [id], onDelete: SetNull)
+  watermark        Watermark?            @relation(fields: [watermarkId], references: [id], onDelete: SetNull)
+  photos           Photo[]
+  photoSets        PhotoSet[]
+  collectionShares CollectionShare[]
+  downloadPins     DownloadPin[]
+  viewActivities   ViewActivity[]
+  emailActivities  EmailActivity[]
+  contacts         CollectionContact[]
+  enhancedShareLinks EnhancedShareLink[]
+  selectionSessions  SelectionSession[]
+
+  @@map("collections")
+}
+
+model Photo {
+  id               String            @id @default(uuid())
+  collectionId     String            @map("collection_id")
+  filename         String
+  originalFilename String            @map("original_filename")
+  fileSize         BigInt            @map("file_size")
+  mimeType         String            @map("mime_type")
+  width            Int?
+  height           Int?
+  isRaw            Boolean           @default(false) @map("is_raw")
+  exifData         Json?             @map("exif_data")
+  focalPoint       Json?             @map("focal_point")
+  orderIndex       Int               @default(0) @map("order_index")
+  isStarred        Boolean           @default(false) @map("is_starred")
+  processingStatus ProcessingStatus  @default(pending) @map("processing_status")
+  thumbnailUrl     String?           @map("thumbnail_url")
+  webUrl           String?           @map("web_url")
+  highResUrl       String?           @map("high_res_url")
+  originalUrl      String?           @map("original_url")
+  watermarkedUrl   String?           @map("watermarked_url")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+
+  // Relations
+  collection       Collection          @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  coverForCollections Collection[]     @relation("CollectionCoverPhoto")
+  photoSetPhotos   PhotoSetPhoto[]
+  downloadPins     DownloadPin[]
+  viewActivities   ViewActivity[]
+  photoPresets     PhotoPreset[]
+  favorites        PhotoFavorite[]
+  photoSelections  PhotoSelection[]
+
+  @@map("photos")
+}
+
+model PhotoSet {
+  id           String    @id @default(uuid())
+  collectionId String    @map("collection_id")
+  name         String
+  description  String?
+  orderIndex   Int       @default(0) @map("order_index")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  collection     Collection      @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  photoSetPhotos PhotoSetPhoto[]
+
+  @@map("photo_sets")
+}
+
+model PhotoSetPhoto {
+  photoId     String @map("photo_id")
+  photoSetId  String @map("photo_set_id")
+  orderIndex  Int    @default(0) @map("order_index")
+
+  // Relations
+  photo    Photo    @relation(fields: [photoId], references: [id], onDelete: Cascade)
+  photoSet PhotoSet @relation(fields: [photoSetId], references: [id], onDelete: Cascade)
+
+  @@id([photoId, photoSetId])
+  @@map("photo_set_photos")
+}
+
+model Watermark {
+  id        String   @id @default(uuid())
+  ownerId   String   @map("owner_id")
+  name      String
+  fileUrl   String   @map("file_url")
+  position  String   @default("bottom_right")
+  scale     Float    @default(0.1)
+  opacity   Float    @default(1.0)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  owner       User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  collections Collection[]
+
+  @@map("watermarks")
+}
+
+model CollectionPreset {
+  id        String   @id @default(uuid())
+  ownerId   String   @map("owner_id")
+  name      String
+  settings  Json
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@map("collection_presets")
+}
+
+model LightroomPreset {
+  id          String   @id @default(uuid())
+  ownerId     String   @map("owner_id")
+  name        String
+  xmpContent  String   @map("xmp_content")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  owner        User          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  photoPresets PhotoPreset[]
+
+  @@map("lightroom_presets")
+}
+
+model PhotoPreset {
+  photoId   String   @map("photo_id")
+  presetId  String   @map("preset_id")
+  appliedAt DateTime @default(now()) @map("applied_at")
+
+  // Relations
+  photo  Photo           @relation(fields: [photoId], references: [id], onDelete: Cascade)
+  preset LightroomPreset @relation(fields: [presetId], references: [id], onDelete: Cascade)
+
+  @@id([photoId, presetId])
+  @@map("photo_presets")
+}
+
+model CollectionShare {
+  id             String    @id @default(uuid())
+  collectionId   String    @map("collection_id")
+  sharedBy       String    @map("shared_by")
+  recipientEmail String?   @map("recipient_email")
+  accessToken    String    @unique @map("access_token")
+  expiresAt      DateTime? @map("expires_at")
+  accessedAt     DateTime? @map("accessed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  sharedByUser User     @relation(fields: [sharedBy], references: [id], onDelete: Cascade)
+
+  @@map("collection_shares")
+}
+
+model DownloadPin {
+  id           String             @id @default(uuid())
+  collectionId String?            @map("collection_id")
+  photoId      String?            @map("photo_id")
+  pin          String
+  clientEmail  String?            @map("client_email")
+  resolution   DownloadResolution @default(web)
+  expiresAt    DateTime           @map("expires_at")
+  attempts     Int                @default(0)
+  maxAttempts  Int                @default(5) @map("max_attempts")
+  usedAt       DateTime?          @map("used_at")
+  createdAt    DateTime           @default(now()) @map("created_at")
+
+  // Relations
+  collection         Collection?         @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  photo              Photo?              @relation(fields: [photoId], references: [id], onDelete: Cascade)
+  downloadActivities DownloadActivity[]
+
+  @@map("download_pins")
+}
+
+model DownloadActivity {
+  id          String             @id @default(uuid())
+  pinId       String             @map("pin_id")
+  clientEmail String?            @map("client_email")
+  clientIp    String?            @map("client_ip")
+  userAgent   String?            @map("user_agent")
+  success     Boolean
+  resolution  DownloadResolution?
+  fileSize    BigInt?            @map("file_size")
+  downloadUrl String?            @map("download_url")
+  createdAt   DateTime           @default(now()) @map("created_at")
+
+  // Relations
+  pin DownloadPin @relation(fields: [pinId], references: [id], onDelete: Cascade)
+
+  @@map("download_activities")
+}
+
+model ViewActivity {
+  id           String    @id @default(uuid())
+  collectionId String?   @map("collection_id")
+  photoId      String?   @map("photo_id")
+  clientEmail  String?   @map("client_email")
+  clientIp     String?   @map("client_ip")
+  userAgent    String?   @map("user_agent")
+  referrer     String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  collection Collection? @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  photo      Photo?      @relation(fields: [photoId], references: [id], onDelete: Cascade)
+
+  @@map("view_activities")
+}
+
+model EmailActivity {
+  id             String    @id @default(uuid())
+  collectionId   String    @map("collection_id")
+  templateName   String    @map("template_name")
+  recipientEmail String    @map("recipient_email")
+  subject        String?
+  sentAt         DateTime  @default(now()) @map("sent_at")
+  openedAt       DateTime? @map("opened_at")
+  clickedAt      DateTime? @map("clicked_at")
+  messageId      String?   @map("message_id")
+
+  // Relations
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  @@map("email_activities")
+}
+
+model EmailTemplate {
+  id           String   @id @default(uuid())
+  ownerId      String   @map("owner_id")
+  name         String
+  subject      String
+  htmlContent  String   @map("html_content")
+  textContent  String?  @map("text_content")
+  variables    Json?
+  isDefault    Boolean  @default(false) @map("is_default")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@map("email_templates")
+}
+
+model GlobalSetting {
+  id        String   @id @default(uuid())
+  ownerId   String   @map("owner_id")
+  key       String
+  value     Json
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerId, key])
+  @@map("global_settings")
+}
+
+model UserSession {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  accessToken  String   @map("access_token")
+  refreshToken String   @map("refresh_token")
+  expiresAt    DateTime @map("expires_at")
+  clientIp     String?  @map("client_ip")
+  userAgent    String?  @map("user_agent")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_sessions")
+}
+
+model PhotoFavorite {
+  id           String   @id @default(uuid())
+  photoId      String   @map("photo_id")
+  clientEmail  String   @map("client_email")
+  notes        String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  // Relations
+  photo Photo @relation(fields: [photoId], references: [id], onDelete: Cascade)
+
+  @@unique([photoId, clientEmail])
+  @@map("photo_favorites")
+}
+
+model CollectionContact {
+  id            String   @id @default(uuid())
+  collectionId  String   @map("collection_id")
+  contactEmail  String   @map("contact_email")
+  contactName   String?  @map("contact_name")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  // Relations
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  @@unique([collectionId, contactEmail])
+  @@map("collection_contacts")
+}
+
+// New models for enhanced features
+
+model BatchJob {
+  id               String          @id @default(uuid())
+  userId           String          @map("user_id")
+  photos           String[]        // Array of photo IDs
+  settings         Json           // Processing settings
+  presetName       String?        @map("preset_name")
+  status           BatchJobStatus @default(pending) @map("status")
+  progress         Int           @default(0)
+  totalPhotos      Int           @default(0) @map("total_photos")
+  completedPhotos  Int           @default(0) @map("completed_photos")
+  failedPhotos     Int           @default(0) @map("failed_photos")
+  error            String?
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+  completedAt      DateTime?     @map("completed_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("batch_jobs")
+}
+
+model ProcessingPreset {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  name         String
+  description  String
+  settings     Json     // Processing settings object
+  isPublic     Boolean  @default(false) @map("is_public")
+  isBuiltIn    Boolean  @default(false) @map("is_built_in")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("processing_presets")
+}
+
+model EnhancedShareLink {
+  id                  String   @id @default(uuid())
+  collectionId        String   @map("collection_id")
+  createdById         String   @map("created_by_id")
+  token               String   @unique
+  title               String
+  description         String?
+  isActive            Boolean  @default(true) @map("is_active")
+  isPasswordProtected Boolean  @default(false) @map("is_password_protected")
+  password            String?
+  allowDownload       Boolean  @default(true) @map("allow_download")
+  allowComments       Boolean  @default(true) @map("allow_comments")
+  allowFavorites      Boolean  @default(true) @map("allow_favorites")
+  expiresAt           DateTime? @map("expires_at")
+  maxViews            Int?     @map("max_views")
+  currentViews        Int      @default(0) @map("current_views")
+  uniqueVisitors      Int      @default(0) @map("unique_visitors")
+  recipientEmails     String[] @map("recipient_emails")
+  customMessage       String?  @map("custom_message")
+  trackingEnabled     Boolean  @default(true) @map("tracking_enabled")
+  requirePin          Boolean  @default(false) @map("require_pin")
+  downloadPin         String?  @map("download_pin")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  createdBy  User       @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  activities ShareActivity[]
+
+  @@map("enhanced_share_links")
+}
+
+model ShareActivity {
+  id        String               @id @default(uuid())
+  shareId   String               @map("share_id")
+  action    ShareActivityAction
+  userAgent String?              @map("user_agent")
+  ipAddress String?              @map("ip_address")
+  details   Json?
+  timestamp DateTime             @default(now())
+
+  // Relations
+  shareLink EnhancedShareLink @relation(fields: [shareId], references: [id], onDelete: Cascade)
+
+  @@map("share_activities")
+}
+
+model SelectionSession {
+  id            String                   @id @default(uuid())
+  collectionId  String                   @map("collection_id")
+  clientId      String                   @map("client_id")
+  clientName    String                   @map("client_name")
+  clientEmail   String                   @map("client_email")
+  status        SelectionSessionStatus   @default(active)
+  deadline      DateTime?
+  instructions  String?
+  allowDownload Boolean                  @default(true) @map("allow_download")
+  maxSelections Int?                     @map("max_selections")
+  createdAt     DateTime                 @default(now()) @map("created_at")
+  updatedAt     DateTime                 @updatedAt @map("updated_at")
+
+  // Relations
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  client     User       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  selections PhotoSelection[]
+
+  @@map("selection_sessions")
+}
+
+model PhotoSelection {
+  id        String               @id @default(uuid())
+  sessionId String               @map("session_id")
+  photoId   String               @map("photo_id")
+  clientId  String               @map("client_id")
+  status    PhotoSelectionStatus @default(pending)
+  comment   String?
+  rating    Int?                 // 1-5 star rating
+  timestamp DateTime             @default(now())
+  updatedAt DateTime             @updatedAt @map("updated_at")
+
+  // Relations
+  session SelectionSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  photo   Photo            @relation(fields: [photoId], references: [id], onDelete: Cascade)
+  client  User             @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, photoId]) // One selection per photo per session
+  @@map("photo_selections")
+}
+
+// Additional enums for new features
+
+enum BatchJobStatus {
+  pending
+  processing
+  completed
+  failed
+  cancelled
+}
+
+enum ShareActivityAction {
+  viewed
+  downloaded
+  favorited
+  commented
+  password_entered
+  pin_entered
+  email_opened
+  link_shared
+}
+
+enum SelectionSessionStatus {
+  active
+  completed
+  expired
+  cancelled
+}
+
+enum PhotoSelectionStatus {
+  pending
+  favorite
+  approved
+  rejected
+  maybe
+}

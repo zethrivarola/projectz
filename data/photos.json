@@ -1,0 +1,50 @@
+[
+  {
+    "id": "f33b6b5c-6635-40c8-8eb1-172741af798e",
+    "filename": "f33b6b5c-6635-40c8-8eb1-172741af798e.jpg",
+    "originalFilename": "riki guitarra front rzd SRGB.jpg",
+    "collectionId": "d95c02b9-61aa-409a-a63a-c0274710aafe",
+    "orderIndex": 1,
+    "thumbnailUrl": "/uploads/d95c02b9-61aa-409a-a63a-c0274710aafe/thumbnails/thumb_f33b6b5c-6635-40c8-8eb1-172741af798e.jpg",
+    "webUrl": "/uploads/d95c02b9-61aa-409a-a63a-c0274710aafe/web/web_f33b6b5c-6635-40c8-8eb1-172741af798e.jpg",
+    "highResUrl": "/uploads/d95c02b9-61aa-409a-a63a-c0274710aafe/high-res/highres_f33b6b5c-6635-40c8-8eb1-172741af798e.jpg",
+    "originalUrl": "/uploads/d95c02b9-61aa-409a-a63a-c0274710aafe/original/f33b6b5c-6635-40c8-8eb1-172741af798e.jpg",
+    "width": 2160,
+    "height": 1440,
+    "isRaw": false,
+    "processingStatus": "completed",
+    "uploadedAt": "2025-09-18T12:29:22.469Z",
+    "createdAt": "2025-09-18T12:29:22.469Z",
+    "metadata": {
+      "width": 2160,
+      "height": 1440,
+      "format": "jpeg",
+      "density": 300,
+      "hasAlpha": false
+    }
+  },
+  {
+    "id": "55bb33ac-42bd-40bb-b8f4-eab3462c7087",
+    "filename": "55bb33ac-42bd-40bb-b8f4-eab3462c7087.jpg",
+    "originalFilename": "riki taping.jpg",
+    "collectionId": "d95c02b9-61aa-409a-a63a-c0274710aafe",
+    "orderIndex": 2,
+    "thumbnailUrl": "/uploads/d95c02b9-61aa-409a-a63a-c0274710aafe/thumbnails/thumb_55bb33ac-42bd-40bb-b8f4-eab3462c7087.jpg",
+    "webUrl": "/uploads/d95c02b9-61aa-409a-a63a-c0274710aafe/web/web_55bb33ac-42bd-40bb-b8f4-eab3462c7087.jpg",
+    "highResUrl": "/uploads/d95c02b9-61aa-409a-a63a-c0274710aafe/high-res/highres_55bb33ac-42bd-40bb-b8f4-eab3462c7087.jpg",
+    "originalUrl": "/uploads/d95c02b9-61aa-409a-a63a-c0274710aafe/original/55bb33ac-42bd-40bb-b8f4-eab3462c7087.jpg",
+    "width": 6000,
+    "height": 4000,
+    "isRaw": false,
+    "processingStatus": "completed",
+    "uploadedAt": "2025-09-18T12:29:23.671Z",
+    "createdAt": "2025-09-18T12:29:23.671Z",
+    "metadata": {
+      "width": 6000,
+      "height": 4000,
+      "format": "jpeg",
+      "density": 300,
+      "hasAlpha": false
+    }
+  }
+]
