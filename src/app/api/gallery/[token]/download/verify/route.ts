@@ -7,6 +7,9 @@ const VerifyPinSchema = z.object({
   pin: z.string().length(4),
 })
 
+// Define the DownloadResolution type to match your Prisma schema
+type DownloadResolution = 'web' | 'high_res' | 'original'
+
 interface DownloadPinWithIncludes {
   id: string
   pin: string
@@ -43,13 +46,20 @@ interface DownloadPinWithIncludes {
   }
 }
 
+// Helper function to validate and cast resolution
+function validateResolution(resolution: string): DownloadResolution {
+  if (resolution === 'web' || resolution === 'high_res' || resolution === 'original') {
+    return resolution as DownloadResolution
+  }
+  return 'web' // Default fallback
+}
+
 // POST /api/gallery/[token]/download/verify - Verify PIN and provide download
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ token: string }> }  // Fixed: changed from 'slug' to 'token'
+  { params }: { params: Promise<{ token: string }> }
 ) {
   try {
-    // Fixed: await params and destructure token correctly
     const resolvedParams = await params
     const { token } = resolvedParams
     
@@ -140,7 +150,7 @@ export async function POST(
           clientIp: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),
           userAgent: request.headers.get('user-agent'),
           success: true,
-          resolution: downloadPin.resolution,
+          resolution: validateResolution(downloadPin.resolution), // Fixed: validate and cast the resolution
           fileSize: getFileSize(downloadPin),
           downloadUrl,
         }

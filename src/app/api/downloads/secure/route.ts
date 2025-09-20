@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
       const mimeType = mime.lookup(normalizedPath) || 'application/octet-stream'
       const filename = path.basename(normalizedPath)
 
-      return new NextResponse(fileBuffer, {
+      return new NextResponse(fileBuffer as BodyInit, {
         headers: {
           'Content-Type': mimeType,
           'Content-Disposition': `attachment; filename="${filename}"`,

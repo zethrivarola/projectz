@@ -3,6 +3,8 @@ import { AuthService } from '@/lib/auth'
 import { storage } from '@/lib/storage'
 import fs from 'fs/promises'
 import path from 'path'
+import { Share } from '@/types/share'
+
 
 interface Collection {
   id: string
@@ -21,11 +23,7 @@ interface Collection {
   [key: string]: unknown
 }
 
-interface Share {
-  shareToken: string
-  collectionId: string
-  [key: string]: unknown
-}
+
 
 // GET /api/collections/[slug] - Get collection by slug
 export async function GET(

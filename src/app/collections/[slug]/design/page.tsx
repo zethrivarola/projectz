@@ -290,20 +290,23 @@ const fetchCollection = useCallback(async () => {
   }
 
   const copyShareUrl = async () => {
-    let url = shareUrl
-    if (!url) {
-      url = await generateShareUrl()
-      if (!url) return
-    }
-
-    try {
-      await navigator.clipboard.writeText(url)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch (error) {
-      console.error('Failed to copy URL:', error)
+  let url = shareUrl
+  if (!url) {
+    const newUrl = await generateShareUrl()
+    if (newUrl) {
+      url = newUrl
+    } else {
+      return 
     }
   }
+  try {
+    await navigator.clipboard.writeText(url)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  } catch (error) {
+    console.error('Failed to copy URL:', error)
+  }
+}
 
   const applyColorPreset = (preset: typeof COLOR_PRESETS[0]) => {
     setBackgroundColor(preset.background)

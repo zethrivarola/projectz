@@ -26,6 +26,10 @@ export class AuthService {
     return bcrypt.hash(password, 12)
   }
 
+  static async verifyPassword(plainPassword: string, hashedPassword: string): Promise<boolean> {
+    return bcrypt.compare(plainPassword, hashedPassword)
+  }
+
   static async comparePasswords(password: string, hashedPassword: string): Promise<boolean> {
     return bcrypt.compare(password, hashedPassword)
   }

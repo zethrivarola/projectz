@@ -1,38 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { z } from 'zod'
-import crypto from 'crypto'
 
 const AddFavoriteSchema = z.object({
   photoId: z.string(),
-  clientEmail: z.string().email().optional(),
+  clientEmail: z.string().email(),
   action: z.enum(['add', 'remove']).optional(),
   notes: z.string().optional(),
 })
-
-interface FavoriteWhereClause {
-  photo: {
-    collectionId: string
-  }
-  clientEmail?: string
-  OR?: Array<{
-    clientEmail?: null
-    anonymousId?: string
-  }>
-}
-
-// Helper to generate anonymous client identifier
-function generateClientIdentifier(request: NextRequest): string {
-  const userAgent = request.headers.get('user-agent') || ''
-  const ip = request.headers.get('x-forwarded-for') || 
-             request.headers.get('x-real-ip') || 
-             request.ip || 
-             'unknown'
-  
-  const hash = crypto.createHash('sha256')
-  hash.update(`${userAgent}_${ip}`)
-  return hash.digest('hex').substring(0, 16)
-}
 
 // GET /api/gallery/[token]/favorites - Get favorites for this gallery
 export async function GET(
@@ -43,7 +18,10 @@ export async function GET(
     const { token } = await params
     const { searchParams } = new URL(request.url)
     const clientEmail = searchParams.get('clientEmail')
-    const anonymous = searchParams.get('anonymous') === 'true'
+
+    if (!clientEmail) {
+      return NextResponse.json({ error: 'clientEmail is required' }, { status: 400 })
+    }
 
     // Verify gallery access
     const share = await prisma.collectionShare.findUnique({
@@ -55,22 +33,12 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid access token' }, { status: 404 })
     }
 
-    // Get favorites for this collection
-    const whereClause: FavoriteWhereClause = {
+    // Build where clause for authenticated favorites only
+    const whereClause = {
       photo: {
         collectionId: share.collectionId
-      }
-    }
-
-    if (clientEmail && !anonymous) {
-      whereClause.clientEmail = clientEmail
-    } else if (anonymous) {
-      // For anonymous users, return aggregate data only
-      const anonymousId = generateClientIdentifier(request)
-      whereClause.OR = [
-        { clientEmail: null },
-        { anonymousId: anonymousId }
-      ]
+      },
+      clientEmail: clientEmail
     }
 
     const favorites = await prisma.photoFavorite.findMany({
@@ -161,17 +129,12 @@ export async function POST(
       return NextResponse.json({ error: 'Photo not found in collection' }, { status: 404 })
     }
 
-    // Handle anonymous vs authenticated favorites
-    const clientIdentifier = data.clientEmail || `anon_${generateClientIdentifier(request)}`
-    const isAnonymous = !data.clientEmail
-
     // Check for existing favorite
-    const whereClause = isAnonymous 
-      ? { photoId: data.photoId, anonymousId: clientIdentifier }
-      : { photoId: data.photoId, clientEmail: data.clientEmail! }
-
     const existingFavorite = await prisma.photoFavorite.findFirst({
-      where: whereClause
+      where: {
+        photoId: data.photoId,
+        clientEmail: data.clientEmail
+      }
     })
 
     let result
@@ -186,7 +149,7 @@ export async function POST(
         result = {
           action: 'removed',
           photoId: data.photoId,
-          clientIdentifier: clientIdentifier.startsWith('anon_') ? 'anonymous' : clientIdentifier
+          clientEmail: data.clientEmail
         }
       } else {
         return NextResponse.json({ error: 'Favorite not found' }, { status: 404 })
@@ -200,15 +163,10 @@ export async function POST(
         })
       }
 
-      const favoriteData: Record<string, unknown> = {
+      const favoriteData = {
         photoId: data.photoId,
-        notes: data.notes,
-      }
-
-      if (isAnonymous) {
-        favoriteData.anonymousId = clientIdentifier
-      } else {
-        favoriteData.clientEmail = data.clientEmail
+        clientEmail: data.clientEmail,
+        notes: data.notes || null
       }
 
       const favorite = await prisma.photoFavorite.create({
@@ -230,18 +188,16 @@ export async function POST(
       result = {
         action: 'added',
         favorite,
-        clientIdentifier: clientIdentifier.startsWith('anon_') ? 'anonymous' : clientIdentifier
+        clientEmail: data.clientEmail
       }
     }
 
-    // Log the activity (enhanced)
+    // Log the activity
     await prisma.viewActivity.create({
       data: {
         collectionId: share.collectionId,
         photoId: data.photoId,
-        clientEmail: isAnonymous ? null : data.clientEmail,
-        anonymousId: isAnonymous ? clientIdentifier : null,
-        activityType: data.action === 'remove' ? 'unfavorite' : 'favorite',
+        clientEmail: data.clientEmail,
         clientIp: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),
         userAgent: request.headers.get('user-agent'),
         referrer: request.headers.get('referer'),
@@ -282,6 +238,10 @@ export async function DELETE(
       return NextResponse.json({ error: 'photoId required' }, { status: 400 })
     }
 
+    if (!clientEmail) {
+      return NextResponse.json({ error: 'clientEmail required' }, { status: 400 })
+    }
+
     // Verify gallery access
     const share = await prisma.collectionShare.findUnique({
       where: { accessToken: token },
@@ -292,17 +252,10 @@ export async function DELETE(
       return NextResponse.json({ error: 'Invalid access token' }, { status: 404 })
     }
 
-    // Build where clause for deletion
-    const clientIdentifier = clientEmail || `anon_${generateClientIdentifier(request)}`
-    const isAnonymous = !clientEmail
-
-    const whereClause = isAnonymous 
-      ? { photoId, anonymousId: clientIdentifier }
-      : { photoId, clientEmail: clientEmail! }
-
     const deletedFavorite = await prisma.photoFavorite.deleteMany({
       where: {
-        ...whereClause,
+        photoId,
+        clientEmail,
         photo: {
           collectionId: share.collectionId
         }
@@ -318,9 +271,7 @@ export async function DELETE(
       data: {
         collectionId: share.collectionId,
         photoId,
-        clientEmail: isAnonymous ? null : clientEmail,
-        anonymousId: isAnonymous ? clientIdentifier : null,
-        activityType: 'unfavorite',
+        clientEmail,
         clientIp: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),
         userAgent: request.headers.get('user-agent'),
         referrer: request.headers.get('referer'),

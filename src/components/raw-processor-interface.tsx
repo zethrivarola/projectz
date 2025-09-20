@@ -84,6 +84,42 @@ export function RawProcessorInterface({ photo, onProcessingComplete }: RawProces
   const [autoProcess, setAutoProcess] = useState(false)
   const [lastProcessTime, setLastProcessTime] = useState<number>(0)
 
+const processRaw = useCallback(async () => {
+    setIsProcessing(true)
+    const startTime = Date.now()
+
+    try {
+      const response = await fetch(`/api/photos/${photo.id}/process-raw`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ settings }),
+      })
+
+      if (!response.ok) {
+        throw new Error('RAW processing failed')
+      }
+
+      const result = await response.json()
+      setProcessedUrl(result.processedUrl)
+      setLastProcessTime(Date.now())
+      onProcessingComplete?.(result.processedUrl)
+
+      // Show processing time feedback
+      const processingTime = ((Date.now() - startTime) / 1000).toFixed(1)
+      console.log(`RAW processing completed in ${processingTime}s`)
+
+    } catch (error) {
+      console.error('RAW processing error:', error)
+      if (!autoProcess) {
+        alert('RAW processing failed. Please try again.')
+      }
+    } finally {
+      setIsProcessing(false)
+    }
+  }, [photo, settings, setIsProcessing, setProcessedUrl, setLastProcessTime, onProcessingComplete, autoProcess]);
+
   useEffect(() => {
     // Check if any settings have changed from defaults
     const defaultSettings = {
@@ -195,41 +231,7 @@ export function RawProcessorInterface({ photo, onProcessingComplete }: RawProces
     }
   }
 
-  const processRaw = useCallback(async () => {
-    setIsProcessing(true)
-    const startTime = Date.now()
-
-    try {
-      const response = await fetch(`/api/photos/${photo.id}/process-raw`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ settings }),
-      })
-
-      if (!response.ok) {
-        throw new Error('RAW processing failed')
-      }
-
-      const result = await response.json()
-      setProcessedUrl(result.processedUrl)
-      setLastProcessTime(Date.now())
-      onProcessingComplete?.(result.processedUrl)
-
-      // Show processing time feedback
-      const processingTime = ((Date.now() - startTime) / 1000).toFixed(1)
-      console.log(`RAW processing completed in ${processingTime}s`)
-
-    } catch (error) {
-      console.error('RAW processing error:', error)
-      if (!autoProcess) {
-        alert('RAW processing failed. Please try again.')
-      }
-    } finally {
-      setIsProcessing(false)
-    }
-  }, [photo, settings, setIsProcessing, setProcessedUrl, setLastProcessTime, onProcessingComplete, autoProcess]);
+  
 
   const downloadProcessed = async () => {
     if (!processedUrl) return

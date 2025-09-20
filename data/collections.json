@@ -12,7 +12,7 @@
     "tags": [],
     "dateTaken": null,
     "createdAt": "2025-09-18T12:24:27.575Z",
-    "updatedAt": "2025-09-20T09:54:33.934Z",
+    "updatedAt": "2025-09-20T13:38:38.803Z",
     "photoCount": 9,
     "coverPhoto": {
       "id": "06f8a13e-72ad-4931-a87d-95489bebb63c",
@@ -24,7 +24,7 @@
       "typography": {
         "titleFont": "Montserrat",
         "titleSize": 80,
-        "titleColor": "#c24b24"
+        "titleColor": "#0011ff"
       },
       "colors": {
         "background": "#ffffff",
@@ -36,7 +36,7 @@
       },
       "coverFocus": {
         "x": 50,
-        "y": 5
+        "y": 100
       }
     }
   },
@@ -53,12 +53,12 @@
     "tags": [],
     "dateTaken": null,
     "createdAt": "2025-09-20T08:26:54.478Z",
-    "updatedAt": "2025-09-20T09:38:02.916Z",
-    "photoCount": 2,
+    "updatedAt": "2025-09-20T18:23:13.474Z",
+    "photoCount": 3,
     "coverPhoto": {
-      "id": "8f3df060-b3e4-403b-a94f-0ef8c53f9a3f",
-      "thumbnailUrl": "/uploads/b97a49fe-adae-4437-9161-5bda807d4f13/thumbnails/thumb_8f3df060-b3e4-403b-a94f-0ef8c53f9a3f.jpg",
-      "webUrl": "/uploads/b97a49fe-adae-4437-9161-5bda807d4f13/web/web_8f3df060-b3e4-403b-a94f-0ef8c53f9a3f.jpg"
+      "id": "4cad58ba-b11f-4d7c-b8f9-b4c0a1a0bf29",
+      "thumbnailUrl": "/uploads/b97a49fe-adae-4437-9161-5bda807d4f13/thumbnails/thumb_4cad58ba-b11f-4d7c-b8f9-b4c0a1a0bf29.jpg",
+      "webUrl": "/uploads/b97a49fe-adae-4437-9161-5bda807d4f13/web/web_4cad58ba-b11f-4d7c-b8f9-b4c0a1a0bf29.jpg"
     },
     "design": {
       "coverLayout": "center",

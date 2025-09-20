@@ -678,9 +678,9 @@ export function EnhancedSharingSystem({
                           <div className="flex-1">
                             <div className="text-sm">
                               <span className="font-medium capitalize">{activity.action}</span>
-                              {activity.details?.photoId && (
-                                <span className="text-muted-foreground"> • Photo {activity.details.photoId}</span>
-                              )}
+                              {activity.details && typeof activity.details === 'object' && 'photoId' in activity.details && (
+  <span className="text-muted-foreground"> • Photo {(activity.details as { photoId: string }).photoId}</span>
+)}
                             </div>
                             <div className="text-xs text-muted-foreground">
                               {share?.title} • {formatDate(activity.timestamp)}

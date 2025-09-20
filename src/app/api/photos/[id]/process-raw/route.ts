@@ -168,11 +168,11 @@ export async function POST(
             webUrl: processedUrl,
             highResUrl: processedUrl,
             originalUrl: processedUrl,
-            exifData: {
-              ...(updateData.exifData as ExifData),
-              parentPhotoId: photo.id,
-              isProcessedVersion: true,
-            }
+            exifData: JSON.stringify({
+  ...(updateData.exifData as ExifData),
+  parentPhotoId: photo.id,
+  isProcessedVersion: true,
+})
           }
         })
 
@@ -207,11 +207,11 @@ export async function POST(
         where: { id: id },  // Fixed: use destructured 'id' instead of 'params.id'
         data: {
           processingStatus: 'failed',
-          exifData: {
-            ...(photo.exifData as ExifData || {}),
-            processingError: processingError instanceof Error ? processingError.message : 'Unknown error',
-            lastProcessingAttempt: new Date().toISOString(),
-          }
+          exifData: JSON.stringify({
+  ...(photo.exifData as ExifData || {}),
+  processingError: processingError instanceof Error ? processingError.message : 'Unknown error',
+  lastProcessingAttempt: new Date().toISOString(),
+})
         }
       })
 

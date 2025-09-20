@@ -371,7 +371,10 @@ export function ClientFavoritesSystem({
                   {/* Filter */}
                   <select
                     value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value)}
+                    onChange={(e) => {
+  const value = e.target.value as "favorite" | "pending" | "all" | "approved" | "rejected"
+  setFilterStatus(value)
+}}
                     className="px-3 py-1 text-sm border border-border rounded-md bg-background"
                   >
                     <option value="all">All Photos ({photos.length})</option>

@@ -32,6 +32,8 @@ interface RawPhoto {
   filename: string
   originalFilename: string
   thumbnailUrl: string
+  webUrl: string
+  originalUrl: string
   isRaw: boolean
   rawFormat?: string
   processingStatus: string
@@ -166,9 +168,14 @@ export default function RawProcessingPage() {
   }
 
   const handleProcessPhoto = (photo: RawPhoto) => {
-    setSelectedPhoto(photo)
-    setShowProcessor(true)
+  const photoWithUrls = {
+    ...photo,
+    webUrl: photo.thumbnailUrl,
+    originalUrl: photo.thumbnailUrl
   }
+  setSelectedPhoto(photoWithUrls)
+  setShowProcessor(true)
+}
 
   const handleProcessingComplete = (processedUrl: string) => {
     console.log('Processing completed:', processedUrl)

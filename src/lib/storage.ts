@@ -1,5 +1,6 @@
 import fs from 'fs/promises'
 import path from 'path'
+import { Share } from '@/types/share'
 
 const STORAGE_DIR = process.env.STORAGE_DIR || './data'
 const COLLECTIONS_FILE = path.join(STORAGE_DIR, 'collections.json')
@@ -10,21 +11,22 @@ const FAVORITES_FILE = path.join(STORAGE_DIR, 'favorites.json')
 interface Collection {
   id: string
   title: string
-  description?: string
+  description?: string | null
   slug: string
   ownerId: string
   visibility: string
   isStarred: boolean
   isFeatured: boolean
   tags: string[]
+  dateTaken?: Date | null
   createdAt: Date
   updatedAt: Date
   photoCount: number
   coverPhoto?: {
-    id: string
-    thumbnailUrl: string
-    webUrl: string
-  }
+  id: string
+  thumbnailUrl: string
+  webUrl: string
+} | null
   design?: {
     coverLayout: string
     typography: {
@@ -63,23 +65,10 @@ interface Photo {
   processingStatus: string
   uploadedAt: Date
   createdAt: Date
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, unknown> | null
 }
 
-interface Share {
-  id: string
-  shareToken: string
-  collectionId: string
-  collectionSlug: string
-  visibility: string
-  password?: string
-  expiresAt?: Date
-  message?: string
-  createdAt: Date
-  createdBy: string
-  accessCount: number
-  lastAccessedAt?: Date
-}
+
 
 interface FavoriteSession {
   id: string
@@ -168,8 +157,8 @@ class PersistentStorage {
         this.shares = new Map(sharesArray.map((s: Share) => [s.shareToken, {
           ...s,
           createdAt: new Date(s.createdAt),
-          expiresAt: s.expiresAt ? new Date(s.expiresAt) : undefined,
-          lastAccessedAt: s.lastAccessedAt ? new Date(s.lastAccessedAt) : undefined
+          expiresAt: s.expiresAt ? new Date(s.expiresAt) : null,
+lastAccessedAt: s.lastAccessedAt ? new Date(s.lastAccessedAt) : null
         }]))
         console.log(`🔗 Loaded ${this.shares.size} shares from storage`)
       } catch (error) {

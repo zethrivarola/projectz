@@ -13,7 +13,7 @@ interface DemoUser {
   password: string
   firstName: string
   lastName: string
-  role: 'owner' | 'admin' | 'user'
+  role: 'owner' | 'admin' | 'client'  // <- Cambiar 'user' por 'client'
 }
 
 // Personal user account (replace with database in production)

@@ -54,10 +54,6 @@ export function ClientFavorites({ accessToken, onFavoriteToggle }: ClientFavorit
   const [notes, setNotes] = useState("")
   const [isLoading, setIsLoading] = useState(false)
 
-  useEffect(() => {
-    loadFavorites()
-  }, [loadFavorites])
-
   const loadFavorites = useCallback(async () => {
     try {
       const response = await fetch(`/api/gallery/${accessToken}/favorites`)
@@ -68,7 +64,11 @@ export function ClientFavorites({ accessToken, onFavoriteToggle }: ClientFavorit
     } catch (error) {
       console.error('Error loading favorites:', error)
     }
-  }, [accessToken, setFavorites]);
+  }, [accessToken])
+
+  useEffect(() => {
+    loadFavorites()
+  }, [loadFavorites])
 
   const toggleFavorite = async (photo: Photo, email?: string) => {
     // If no email set, prompt for it first

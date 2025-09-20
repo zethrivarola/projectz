@@ -5,6 +5,18 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+
+type MetadataType = {
+  camera?: string
+  lens?: string
+  iso?: number
+  focalLength?: string | number
+  aperture?: string
+  shutterSpeed?: string
+  dateTime?: string
+  dimensions?: string 
+  // Agrega otros campos que uses en tu metadata
+}
 import {
   X,
   ChevronLeft,
@@ -365,46 +377,52 @@ const navigateToNext = useCallback((direction: number) => {
                   {currentPhoto.metadata ? (
                     <Card className="bg-white/5 border-white/10">
                       <CardContent className="p-4 space-y-3">
-                        {currentPhoto.metadata.camera && typeof currentPhoto.metadata.camera === 'string' && (
+                        {currentPhoto.metadata && 
+ (currentPhoto.metadata as MetadataType).camera && 
+ typeof (currentPhoto.metadata as MetadataType).camera === 'string' && (
                           <div>
                             <p className="text-sm text-white/70">Camera</p>
-                            <p className="text-sm text-white">{String(currentPhoto.metadata.camera)}</p>
+                            <p className="text-sm text-white">{String((currentPhoto.metadata as MetadataType).camera)}</p>
                           </div>
                         )}
-                        {currentPhoto.metadata.lens && typeof currentPhoto.metadata.lens === 'string' && (
+                        {currentPhoto.metadata && 
+ (currentPhoto.metadata as MetadataType).lens && 
+ typeof (currentPhoto.metadata as MetadataType).lens === 'string' && (
                           <div>
                             <p className="text-sm text-white/70">Lens</p>
-                            <p className="text-sm text-white">{String(currentPhoto.metadata.lens)}</p>
+                            <p className="text-sm text-white">{String((currentPhoto.metadata as MetadataType).lens)}</p>
                           </div>
                         )}
-                        {currentPhoto.metadata.focalLength && typeof currentPhoto.metadata.focalLength !== 'undefined' && (
+                        {currentPhoto.metadata && 
+ (currentPhoto.metadata as MetadataType).focalLength && 
+ typeof (currentPhoto.metadata as MetadataType).focalLength !== 'undefined' && (
                           <div>
                             <p className="text-sm text-white/70">Focal Length</p>
-                            <p className="text-sm text-white">{String(currentPhoto.metadata.focalLength)}</p>
+                            <p className="text-sm text-white">{String((currentPhoto.metadata as MetadataType).focalLength)}</p>
                           </div>
                         )}
-                        {currentPhoto.metadata.aperture && typeof currentPhoto.metadata.aperture !== 'undefined' && (
+                        {(currentPhoto.metadata as MetadataType).aperture && typeof (currentPhoto.metadata as MetadataType).aperture !== 'undefined' && (
                           <div>
                             <p className="text-sm text-white/70">Aperture</p>
-                            <p className="text-sm text-white">f/{String(currentPhoto.metadata.aperture)}</p>
+                            <p className="text-sm text-white">f/{String((currentPhoto.metadata as MetadataType).aperture)}</p>
                           </div>
                         )}
-                        {currentPhoto.metadata.shutterSpeed && typeof currentPhoto.metadata.shutterSpeed !== 'undefined' && (
+                        {(currentPhoto.metadata as MetadataType).shutterSpeed && typeof (currentPhoto.metadata as MetadataType).shutterSpeed !== 'undefined' && (
                           <div>
                             <p className="text-sm text-white/70">Shutter Speed</p>
-                            <p className="text-sm text-white">{String(currentPhoto.metadata.shutterSpeed)}s</p>
+                            <p className="text-sm text-white">{String((currentPhoto.metadata as MetadataType).shutterSpeed)}s</p>
                           </div>
                         )}
-                        {currentPhoto.metadata.iso && typeof currentPhoto.metadata.iso !== 'undefined' && (
+                        {(currentPhoto.metadata as MetadataType).iso && typeof (currentPhoto.metadata as MetadataType).iso !== 'undefined' && (
                           <div>
                             <p className="text-sm text-white/70">ISO</p>
-                            <p className="text-sm text-white">{String(currentPhoto.metadata.iso)}</p>
+                            <p className="text-sm text-white">{String((currentPhoto.metadata as MetadataType).iso)}</p>
                           </div>
                         )}
-                        {currentPhoto.metadata.dimensions && typeof currentPhoto.metadata.dimensions === 'string' && (
+                        {(currentPhoto.metadata as MetadataType).dimensions && typeof (currentPhoto.metadata as MetadataType).dimensions === 'string' && (
                           <div>
                             <p className="text-sm text-white/70">Dimensions</p>
-                            <p className="text-sm text-white">{String(currentPhoto.metadata.dimensions)}</p>
+                            <p className="text-sm text-white">{String((currentPhoto.metadata as MetadataType).dimensions)}</p>
                           </div>
                         )}
                       </CardContent>

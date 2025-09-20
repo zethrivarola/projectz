@@ -1,8 +1,14 @@
 export interface Share {
+  id: string
   shareToken: string
   collectionId: string
-  createdAt?: Date      // si tu storage guarda fecha de creación
-  ownerId?: string      // opcional, si existe
-  permissions?: string  // opcional, si existe
-  [key: string]: unknown
+  collectionSlug: string
+  visibility: string
+  password: string | null
+  expiresAt: Date | null
+  message: string
+  createdAt: Date
+  createdBy: string
+  accessCount: number
+  lastAccessedAt: Date | null
 }

@@ -17,7 +17,7 @@ export async function POST(
 ) {
   const { token } = await params
   try {
-    const { token } = params
+    
     const body = await request.json()
     const data = DownloadRequestSchema.parse(body)
 
