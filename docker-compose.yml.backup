@@ -1,0 +1,40 @@
+version: '3.9'
+
+services:
+  projectz:
+    build: .
+    container_name: projectz
+    env_file: .env.production
+    ports:
+      - "3000:3000"
+    depends_on:
+      - redis
+      - postgres
+
+  redis:
+    image: redis:7
+    container_name: projectz-redis
+    restart: always
+
+  postgres:
+    image: postgres:16
+    container_name: projectz-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: Zeth_photography
+      POSTGRES_USER: Zeth_Ph
+      POSTGRES_PASSWORD: Showmethemoney$$
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: projectz-cloudflared
+    command: tunnel --config /home/zeth/.cloudflared/config.yml run
+    volumes:
+      - /home/zeth/.cloudflared:/home/zeth/.cloudflared
+    depends_on:
+      - projectz
+
+volumes:
+  postgres_data:

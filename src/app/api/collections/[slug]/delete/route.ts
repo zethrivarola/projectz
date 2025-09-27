@@ -1,40 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/db'  // Added missing import
+import { prisma } from '@/lib/db'
 import { AuthService } from '@/lib/auth'
-import fs from 'fs/promises'
-import path from 'path'
-
-interface Collection {
-  id: string
-  slug: string
-  title: string
-  ownerId: string
-  [key: string]: unknown
-}
-
-interface Photo {
-  id: string
-  collectionId: string
-  filename: string
-  [key: string]: unknown
-}
-
-// Use the same global storage
-declare global {
-  var demoCollections: Map<string, Collection>
-  var demoPhotos: Map<string, Photo>
-}
-
-if (!global.demoCollections) {
-  global.demoCollections = new Map()
-}
-
-if (!global.demoPhotos) {
-  global.demoPhotos = new Map()
-}
-
-const demoCollections = global.demoCollections
-const demoPhotos = global.demoPhotos
+import { demoCollections, demoPhotos } from './globals' // Importamos variables globales
 
 export async function DELETE(
   request: NextRequest,
@@ -42,59 +9,57 @@ export async function DELETE(
 ) {
   try {
     const authHeader = request.headers.get('authorization')
-    const token = authHeader?.replace('Bearer ', '') || request.cookies.get('auth-token')?.value
+    const token =
+      authHeader?.replace('Bearer ', '') ||
+      request.cookies.get('auth-token')?.value
+
     if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
     const payload = AuthService.verifyToken(token)
     if (!payload) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
-    
-    // Fixed: properly await and destructure params
+
     const resolvedParams = await params
     const { slug } = resolvedParams
-    
-    // Verify collection ownership and get collection
+
     const collection = await prisma.collection.findFirst({
       where: {
-        slug: slug,
-        ownerId: payload.userId
-      }
+        slug,
+        ownerId: payload.userId,
+      },
     })
-    
+
     if (!collection) {
       return NextResponse.json({ error: 'Collection not found' }, { status: 404 })
     }
-    
-    // Delete all photos in the collection first
+
+    // Eliminar fotos
     await prisma.photo.deleteMany({
-      where: {
-        collectionId: collection.id
-      }
+      where: { collectionId: collection.id },
     })
-    
-    // Delete all shares for this collection
+
+    // Eliminar shares
     await prisma.collectionShare.deleteMany({
-      where: {
-        collectionId: collection.id
-      }
+      where: { collectionId: collection.id },
     })
-    
-    // Delete the collection
+
+    // Eliminar la colección
     await prisma.collection.delete({
-      where: {
-        id: collection.id
-      }
+      where: { id: collection.id },
     })
-    
+
+    // Opcional: eliminar de las variables globales si se usa para demo
+    demoCollections.delete(slug)
+    demoPhotos.forEach((photo, key) => {
+      if (photo.collectionId === collection.id) demoPhotos.delete(key)
+    })
+
     return NextResponse.json({ success: true })
-    
   } catch (error) {
     console.error('Collection DELETE error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

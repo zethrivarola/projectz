@@ -1,0 +1,35 @@
+# Etapa de build
+FROM ubuntu:24.04 AS builder
+
+# Evitar preguntas durante instalación
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Instalamos dependencias necesarias
+RUN apt-get update && \
+    apt-get install -y curl unzip git && \
+    rm -rf /var/lib/apt/lists/*
+
+# Instalamos Bun
+RUN curl -fsSL https://bun.sh/install | bash
+
+# Ponemos Bun en PATH
+ENV BUN_INSTALL="/root/.bun"
+ENV PATH="$BUN_INSTALL/bin:$PATH"
+
+WORKDIR /app
+
+# Copiamos package.json y .env.production
+COPY package.json ./
+COPY .env.production ./
+
+# Instalamos dependencias
+RUN bun install
+
+# Copiamos todo el proyecto
+COPY . .
+
+# Exponemos el puerto que use tu app
+EXPOSE 3000
+
+# Comando por defecto
+CMD ["bun", "run", "start"]

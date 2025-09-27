@@ -1,0 +1,9 @@
+import { Collection, Photo } from '@/app/api/collections/[slug]/delete/route'
+
+// Declaración global de tipos
+declare global {
+  var demoCollections: Map<string, Collection>
+  var demoPhotos: Map<string, Photo>
+}
+
+export {}
