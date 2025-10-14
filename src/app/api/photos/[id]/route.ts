@@ -1,19 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { AuthService } from '@/lib/auth'
-import { storage } from '@/lib/storage'
+import { prisma } from '@/lib/prisma'
+import fs from 'fs/promises'
+import path from 'path'
 
-export async function DELETE(
+// GET /api/photos/[id] - Get single photo details
+export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }  // Fixed: changed from 'slug' to 'id'
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Fixed: await params and destructure id correctly
-    const resolvedParams = await params
-    const { id } = resolvedParams  // Fixed: changed from 'slug' to 'id'
+    const { id } = await params
     
-    // Check authentication
     const authHeader = request.headers.get('authorization')
-    const token = authHeader?.replace('Bearer ', '') || request.cookies.get('auth-token')?.value
+    const bearerToken = authHeader?.replace('Bearer ', '')
+    const cookieToken = request.cookies.get('auth-token')?.value
+    const token = bearerToken || cookieToken
+
+    console.log(`🔍 GET Photo: ${id}`)
 
     if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -24,71 +28,167 @@ export async function DELETE(
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
 
-    const photoId = id  // Fixed: use destructured 'id' instead of 'params.id'
+    // Get photo with collection info
+    const photo = await prisma.photo.findUnique({
+      where: { id },
+      include: {
+        collection: {
+          select: {
+            id: true,
+            title: true,
+            slug: true,
+            ownerId: true
+          }
+        }
+      }
+    })
 
-    console.log(`🗑️ Deleting photo: ${photoId} for user: ${payload.email}`)
-
-    // Find the photo
-    const photosMap = await storage.getPhotos()
-    const photo = photosMap.get(photoId)
     if (!photo) {
       return NextResponse.json({ error: 'Photo not found' }, { status: 404 })
     }
 
-    // Check if user has permission to delete this photo
-    const collectionsMap = await storage.getCollections()
-    const collection = collectionsMap.get(photo.collectionId)
-    if (!collection) {
-      return NextResponse.json({ error: 'Collection not found' }, { status: 404 })
-    }
-
-    if (collection.ownerId !== payload.userId && payload.role !== 'admin') {
+    // Check ownership
+    if (photo.collection.ownerId !== payload.userId && payload.role !== 'admin') {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
-    // Delete the photo from storage
-    await storage.deletePhoto(photoId)
-
-    // Update collection photo count
-    collection.photoCount = Math.max(0, (collection.photoCount || 0) - 1)
-
-    // If this was the cover photo, set the next available photo as cover
-    if (collection.coverPhoto?.id === photoId) {
-      // Find remaining photos in this collection
-      const updatedPhotosMap = await storage.getPhotos()
-      const remainingPhotos = Array.from(updatedPhotosMap.values())
-        .filter(p => p.collectionId === photo.collectionId)
-        .sort((a, b) => a.orderIndex - b.orderIndex)
-
-      if (remainingPhotos.length > 0) {
-        // Set first remaining photo as cover
-        const newCoverPhoto = remainingPhotos[0]
-        collection.coverPhoto = {
-          id: newCoverPhoto.id,
-          thumbnailUrl: newCoverPhoto.thumbnailUrl,
-          webUrl: newCoverPhoto.webUrl
-        }
-        console.log(`🖼️ Set new cover photo: ${newCoverPhoto.id}`)
-      } else {
-        // No photos left, remove cover
-        collection.coverPhoto = undefined
-        console.log(`🖼️ Removed cover photo - no photos remaining`)
-      }
-    }
-
-    // Save updated collection
-    await storage.setCollection(photo.collectionId, collection)
-
-    console.log(`✅ Photo ${photoId} deleted successfully`)
+    console.log(`✅ Photo found: ${photo.originalFilename}`)
 
     return NextResponse.json({
-      success: true,
-      message: 'Photo deleted successfully',
-      photoId
+      photo: {
+        id: photo.id,
+        filename: photo.filename,
+        originalFilename: photo.originalFilename,
+        fileSize: photo.fileSize.toString(),
+        mimeType: photo.mimeType,
+        width: photo.width,
+        height: photo.height,
+        isRaw: photo.isRaw,
+        exifData: photo.exifData,
+        focalPoint: photo.focalPoint,
+        orderIndex: photo.orderIndex,
+        isStarred: photo.isStarred,
+        processingStatus: photo.processingStatus,
+        thumbnailUrl: photo.thumbnailUrl,
+        webUrl: photo.webUrl,
+        highResUrl: photo.highResUrl,
+        originalUrl: photo.originalUrl,
+        watermarkedUrl: photo.watermarkedUrl,
+        createdAt: photo.createdAt,
+        updatedAt: photo.updatedAt,
+        collection: photo.collection
+      }
     })
 
   } catch (error) {
-    console.error('❌ Photo delete error:', error)
+    console.error('❌ GET Photo error:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
+// DELETE /api/photos/[id] - Delete photo
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    
+    const authHeader = request.headers.get('authorization')
+    const bearerToken = authHeader?.replace('Bearer ', '')
+    const cookieToken = request.cookies.get('auth-token')?.value
+    const token = bearerToken || cookieToken
+
+    console.log(`🗑️ DELETE Photo: ${id}`)
+
+    if (!token) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const payload = AuthService.verifyToken(token)
+    if (!payload) {
+      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+    }
+
+    // Get photo with collection info
+    const photo = await prisma.photo.findUnique({
+      where: { id },
+      include: {
+        collection: {
+          select: {
+            id: true,
+            ownerId: true,
+            coverPhotoId: true
+          }
+        }
+      }
+    })
+
+    if (!photo) {
+      return NextResponse.json({ error: 'Photo not found' }, { status: 404 })
+    }
+
+    // Check ownership
+    if (photo.collection.ownerId !== payload.userId && payload.role !== 'admin') {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    }
+
+    // Delete physical files
+    const uploadDir = process.env.UPLOAD_DIR || './uploads'
+    const collectionDir = path.join(uploadDir, photo.collectionId)
+    
+    const filesToDelete = [
+      path.join(collectionDir, 'original', photo.filename),
+      path.join(collectionDir, 'thumbnails', `thumb_${photo.filename.replace(/\.[^.]+$/, '.jpg')}`),
+      path.join(collectionDir, 'web', `web_${photo.filename.replace(/\.[^.]+$/, '.jpg')}`),
+      path.join(collectionDir, 'high-res', `highres_${photo.filename.replace(/\.[^.]+$/, '.jpg')}`)
+    ]
+
+    for (const filePath of filesToDelete) {
+      try {
+        await fs.unlink(filePath)
+        console.log(`🗑️ Deleted file: ${filePath}`)
+      } catch (error) {
+        console.log(`⚠️ Could not delete file: ${filePath}`)
+      }
+    }
+
+    // Use transaction to delete photo and update collection if needed
+    await prisma.$transaction(async (tx) => {
+      // Delete the photo
+      await tx.photo.delete({ where: { id } })
+
+      // If this was the cover photo, update collection
+      if (photo.collection.coverPhotoId === id) {
+        const remainingPhoto = await tx.photo.findFirst({
+          where: { collectionId: photo.collectionId },
+          orderBy: { orderIndex: 'asc' },
+          select: { id: true }
+        })
+
+        await tx.collection.update({
+          where: { id: photo.collectionId },
+          data: {
+            coverPhotoId: remainingPhoto?.id || null,
+            updatedAt: new Date()
+          }
+        })
+      }
+    })
+
+    console.log(`✅ Photo deleted: ${photo.originalFilename}`)
+
+    return NextResponse.json({ 
+      success: true,
+      message: 'Photo deleted successfully',
+      photoId: id
+    })
+
+  } catch (error) {
+    console.error('❌ DELETE Photo error:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

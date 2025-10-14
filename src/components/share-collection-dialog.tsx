@@ -9,6 +9,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -115,35 +116,41 @@ useEffect(() => {
   }
 
   const onSubmit = async (data: ShareCollectionData) => {
-    setIsLoading(true)
+  setIsLoading(true)
+  try {
+    const token = localStorage.getItem('auth-token')
+    
+    const response = await fetch(`/api/collections/${collection.slug}/share`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,  // ← Agregar esta línea
+      },
+      body: JSON.stringify(data),
+    })
+    
+    if (!response.ok) {
+  console.log('❌ API Error Response:', response.status, response.statusText)
+  const errorData = await response.json()
+  console.log('❌ Error Details:', errorData)
+  throw new Error(errorData.error || 'Failed to create share link')
+}
 
-    try {
-      const response = await fetch(`/api/collections/${collection.slug}/share`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to create share link')
-      }
-
-      const result = await response.json()
-      setShareInfo({
-        accessToken: result.accessToken,
-        shareUrl: generateShareUrl(result.accessToken),
-        expiresAt: result.expiresAt,
-        createdAt: result.createdAt,
-      })
-
-    } catch (error) {
-      console.error('Error creating share link:', error)
-    } finally {
-      setIsLoading(false)
-    }
+const result = await response.json()
+console.log('📦 Share API Response:', result)
+setShareInfo({
+      accessToken: result.shareLink.accessToken,  // ← Cambiar result.accessToken
+      shareUrl: result.shareLink.shareUrl,        // ← Usar shareUrl del backend
+      expiresAt: result.shareLink.expiresAt,
+      createdAt: result.shareLink.createdAt,
+    })
+  } catch (error) {
+    console.error('Error creating share link:', error)
+    alert(error instanceof Error ? error.message : 'Failed to create share link')
+  } finally {
+    setIsLoading(false)
   }
+}
 
   const regenerateLink = async () => {
     setIsLoading(true)
@@ -209,14 +216,14 @@ useEffect(() => {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Share2 className="h-5 w-5" />
-            Share Collection
-          </DialogTitle>
-          <p className="text-sm text-muted-foreground">
-            Share "{collection.title}" with clients
-          </p>
-        </DialogHeader>
+  <DialogTitle className="flex items-center gap-2">
+    <Share2 className="h-5 w-5" />
+    Share Collection
+  </DialogTitle>
+  <DialogDescription>
+    Share "{collection.title}" with clients
+  </DialogDescription>
+</DialogHeader>
 
         <div className="space-y-6">
           {/* Existing Share Link */}
@@ -422,3 +429,4 @@ useEffect(() => {
     </Dialog>
   )
 }
+

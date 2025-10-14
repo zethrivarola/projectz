@@ -1,0 +1,154 @@
+[
+  {
+    "id": "242fff32-8edd-4de3-894e-1a84adf8d4e8",
+    "title": "Poli",
+    "description": "",
+    "slug": "poli",
+    "ownerId": "user-1",
+    "visibility": "private",
+    "passwordHash": null,
+    "isStarred": false,
+    "isFeatured": false,
+    "tags": [],
+    "dateTaken": null,
+    "createdAt": "2025-09-28T23:12:50.204Z",
+    "updatedAt": "2025-09-28T23:43:05.502Z",
+    "photoCount": 4,
+    "coverPhoto": {
+      "id": "878ede4c-1192-41ae-b11b-ad2a790908ad",
+      "thumbnailUrl": "/uploads/242fff32-8edd-4de3-894e-1a84adf8d4e8/thumbnails/thumb_878ede4c-1192-41ae-b11b-ad2a790908ad.jpg",
+      "webUrl": "/uploads/242fff32-8edd-4de3-894e-1a84adf8d4e8/web/web_878ede4c-1192-41ae-b11b-ad2a790908ad.jpg"
+    },
+    "design": {
+      "coverLayout": "center",
+      "typography": {
+        "titleFont": "Playfair Display",
+        "titleSize": 48,
+        "titleColor": "#ffffff"
+      },
+      "colors": {
+        "background": "#ffffff",
+        "accent": "#000000"
+      },
+      "grid": {
+        "columns": 4,
+        "spacing": 12
+      },
+      "coverFocus": {
+        "x": 50,
+        "y": 0
+      }
+    }
+  },
+  {
+    "id": "9880d200-edde-4b4d-aafd-8f5b46edae93",
+    "title": "asdf33",
+    "description": "",
+    "slug": "asdf33",
+    "ownerId": "3d98612c-62db-4a10-b86b-e48bdb68b140",
+    "visibility": "private",
+    "passwordHash": null,
+    "isStarred": false,
+    "isFeatured": false,
+    "tags": [],
+    "dateTaken": null,
+    "createdAt": "2025-09-29T23:16:31.261Z",
+    "updatedAt": "2025-09-29T23:16:31.261Z",
+    "photoCount": 0,
+    "coverPhoto": null,
+    "design": {
+      "coverLayout": "center",
+      "typography": {
+        "titleFont": "Playfair Display",
+        "titleSize": 48,
+        "titleColor": "#ffffff"
+      },
+      "colors": {
+        "background": "#ffffff",
+        "accent": "#000000"
+      },
+      "grid": {
+        "columns": 4,
+        "spacing": 12
+      },
+      "coverFocus": {
+        "x": 50,
+        "y": 50
+      }
+    }
+  },
+  {
+    "id": "fa861a12-071c-4655-8712-9d344993c230",
+    "title": "Politecnica una",
+    "description": "",
+    "slug": "politecnica-una",
+    "ownerId": "3d98612c-62db-4a10-b86b-e48bdb68b140",
+    "visibility": "private",
+    "passwordHash": null,
+    "isStarred": false,
+    "isFeatured": false,
+    "tags": [],
+    "dateTaken": null,
+    "createdAt": "2025-09-30T00:00:53.789Z",
+    "updatedAt": "2025-09-30T00:00:53.789Z",
+    "photoCount": 0,
+    "coverPhoto": null,
+    "design": {
+      "coverLayout": "center",
+      "typography": {
+        "titleFont": "Playfair Display",
+        "titleSize": 48,
+        "titleColor": "#ffffff"
+      },
+      "colors": {
+        "background": "#ffffff",
+        "accent": "#000000"
+      },
+      "grid": {
+        "columns": 4,
+        "spacing": 12
+      },
+      "coverFocus": {
+        "x": 50,
+        "y": 50
+      }
+    }
+  },
+  {
+    "id": "4b518810-a8aa-4556-a2df-dd0dae70ff83",
+    "title": "otro album mas",
+    "description": "",
+    "slug": "otro-album-mas",
+    "ownerId": "3d98612c-62db-4a10-b86b-e48bdb68b140",
+    "visibility": "private",
+    "passwordHash": null,
+    "isStarred": false,
+    "isFeatured": false,
+    "tags": [],
+    "dateTaken": null,
+    "createdAt": "2025-09-30T02:29:48.365Z",
+    "updatedAt": "2025-09-30T02:29:48.365Z",
+    "photoCount": 0,
+    "coverPhoto": null,
+    "design": {
+      "coverLayout": "center",
+      "typography": {
+        "titleFont": "Playfair Display",
+        "titleSize": 48,
+        "titleColor": "#ffffff"
+      },
+      "colors": {
+        "background": "#ffffff",
+        "accent": "#000000"
+      },
+      "grid": {
+        "columns": 4,
+        "spacing": 12
+      },
+      "coverFocus": {
+        "x": 50,
+        "y": 50
+      }
+    }
+  }
+]

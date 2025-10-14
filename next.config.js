@@ -3,9 +3,7 @@ const nextConfig = {
   // Paquetes externos que Next.js no debe empaquetar
   serverExternalPackages: ['sharp'],
 
-  // Salida standalone
-  output: 'standalone',
-
+ 
   // Carpeta de compilación
   distDir: '.next',
 
@@ -67,4 +65,3 @@ const nextConfig = {
   },
 }
 
-module.exports = nextConfig

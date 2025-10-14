@@ -1,91 +1,104 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { AuthService } from '@/lib/auth'
-import { storage } from '@/lib/storage'
+import { prisma } from '@/lib/prisma'
+import { z } from 'zod'
 
-export async function PUT(
+const DesignSchema = z.object({
+  gridStyle: z.string().optional(),
+  gridColumns: z.number().optional(),
+  thumbnailSize: z.string().optional(),
+  gridSpacing: z.string().optional(),
+  navigationStyle: z.string().optional(),
+  typographyStyle: z.string().optional(),
+  colorTheme: z.string().optional(),
+  coverFocalPoint: z.object({
+    x: z.number().min(0).max(100),
+    y: z.number().min(0).max(100)
+  }).optional(),
+  // Nuevos campos
+  coverLayout: z.string().optional(),
+  titleSize: z.number().optional(),
+  titleColor: z.string().optional(),
+  customBackgroundColor: z.string().optional(),
+  customAccentColor: z.string().optional()
+})
+
+// GET /api/collections/[slug]/design - Get collection design settings
+export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
     const { slug } = await params
-
-    console.log(`🎨 Design update request for collection: ${slug}`)
-
-    // Get token from Authorization header or cookies
+    
     const authHeader = request.headers.get('authorization')
     const bearerToken = authHeader?.replace('Bearer ', '')
     const cookieToken = request.cookies.get('auth-token')?.value
     const token = bearerToken || cookieToken
 
+    console.log(`🎨 GET Design settings for collection: ${slug}`)
+
     if (!token) {
-      console.log('⚠️ No authentication token found')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const payload = AuthService.verifyToken(token)
     if (!payload) {
-      console.log('⚠️ Invalid authentication token')
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
 
-    console.log(`✅ Authenticated user: ${payload.email}`)
+    // Get collection design settings
+    const collection = await prisma.collection.findUnique({
+      where: { slug },
+      select: {
+        id: true,
+        ownerId: true,
+        gridStyle: true,
+        gridColumns: true,
+        thumbnailSize: true,
+        gridSpacing: true,
+        navigationStyle: true,
+        typographyStyle: true,
+        colorTheme: true,
+        coverFocalPoint: true,
+        coverLayout: true,
+        titleSize: true,
+        titleColor: true,
+        customBackgroundColor: true,
+        customAccentColor: true
+      }
+    })
 
-    // Get the design data from request body
-    const { design } = await request.json()
-    console.log(`📝 Design data received:`, JSON.stringify(design, null, 2))
-
-    if (!design) {
-      console.log('⚠️ No design data provided')
-      return NextResponse.json({ error: 'Design data is required' }, { status: 400 })
-    }
-
-    // Get collections from storage
-    const collectionsMap = await storage.getCollections()
-    console.log(`📂 Total collections in storage: ${collectionsMap.size}`)
-
-    // Find collection by slug
-    const collection = Array.from(collectionsMap.values()).find(c => c.slug === slug)
     if (!collection) {
-      console.log(`⚠️ Collection not found with slug: ${slug}`)
-      console.log(`Available collections: ${Array.from(collectionsMap.values()).map(c => c.slug).join(', ')}`)
       return NextResponse.json({ error: 'Collection not found' }, { status: 404 })
     }
 
-    console.log(`📁 Found collection: ${collection.title} (ID: ${collection.id})`)
-
-    // Check ownership
     if (collection.ownerId !== payload.userId && payload.role !== 'admin') {
-      console.log(`🚫 Access denied. Owner: ${collection.ownerId}, User: ${payload.userId}`)
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
-    // Update collection with new design data
-    const updatedCollection = {
-      ...collection,
-      design: design,
-      updatedAt: new Date()
-    }
-
-    console.log(`💾 Saving updated collection with design:`, JSON.stringify(updatedCollection.design, null, 2))
-
-    // Use updateCollection method instead of saveCollections
-    await storage.updateCollection(collection.id, updatedCollection)
-
-    console.log(`✅ Design settings saved successfully for collection: ${collection.title}`)
-
-    // Verify the save worked by reading it back
-    const verifyMap = await storage.getCollections()
-    const verifyCollection = verifyMap.get(collection.id)
-    console.log(`🔍 Verification - saved design:`, JSON.stringify(verifyCollection?.design, null, 2))
+    console.log('✅ Design settings retrieved')
 
     return NextResponse.json({
-      success: true,
-      collection: updatedCollection,
-      design: updatedCollection.design
+      design: {
+        gridStyle: collection.gridStyle,
+        gridColumns: collection.gridColumns,
+        thumbnailSize: collection.thumbnailSize,
+        gridSpacing: collection.gridSpacing,
+        navigationStyle: collection.navigationStyle,
+        typographyStyle: collection.typographyStyle,
+        colorTheme: collection.colorTheme,
+        coverFocalPoint: collection.coverFocalPoint,
+        coverLayout: collection.coverLayout,
+        titleSize: collection.titleSize,
+        titleColor: collection.titleColor,
+        customBackgroundColor: collection.customBackgroundColor,
+        customAccentColor: collection.customAccentColor
+      }
     })
 
   } catch (error) {
-    console.error('❌ Design save error:', error)
+    console.error('❌ GET Design settings error:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -93,20 +106,20 @@ export async function PUT(
   }
 }
 
-export async function GET(
+// PUT /api/collections/[slug]/design - Update collection design settings
+export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
     const { slug } = await params
-
-    console.log(`📖 Design get request for collection: ${slug}`)
-
-    // Get token from Authorization header or cookies
+    
     const authHeader = request.headers.get('authorization')
     const bearerToken = authHeader?.replace('Bearer ', '')
     const cookieToken = request.cookies.get('auth-token')?.value
     const token = bearerToken || cookieToken
+
+    console.log(`🎨 UPDATE Design settings for collection: ${slug}`)
 
     if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -117,33 +130,102 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
 
-    // Get collections from storage
-    const collectionsMap = await storage.getCollections()
+    const body = await request.json()
+    const data = DesignSchema.parse(body)
 
-    // Find collection by slug
-    const collection = Array.from(collectionsMap.values()).find(c => c.slug === slug)
+    // Get collection to verify ownership
+    const collection = await prisma.collection.findUnique({
+      where: { slug },
+      select: { id: true, ownerId: true }
+    })
+
     if (!collection) {
       return NextResponse.json({ error: 'Collection not found' }, { status: 404 })
     }
 
-    // Check ownership
     if (collection.ownerId !== payload.userId && payload.role !== 'admin') {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
-    console.log(`✅ Retrieved design for ${collection.title}:`, JSON.stringify(collection.design, null, 2))
+    // Update design settings
+    const updated = await prisma.collection.update({
+      where: { slug },
+      data: {
+        gridStyle: body.gridStyle,
+        gridColumns: body.gridColumns ? parseInt(body.gridColumns) : undefined,	
+        thumbnailSize: body.thumbnailSize,
+        gridSpacing: body.gridSpacing ? parseInt(body.gridSpacing) : undefined,
+        navigationStyle: body.navigationStyle,
+        typographyStyle: body.typographyStyle,
+        colorTheme: body.colorTheme,
+        coverFocalPoint: body.coverFocalPoint,
+        coverLayout: body.coverLayout,
+        titleSize: body.titleSize ? parseInt(body.titleSize) : undefined,
+        titleColor: body.titleColor,
+        customBackgroundColor: body.customBackgroundColor,
+        customAccentColor: body.customAccentColor,
+        updatedAt: new Date()
+      },
+      select: {
+        gridStyle: true,
+        gridColumns: true,
+        thumbnailSize: true,
+        gridSpacing: true,
+        navigationStyle: true,
+        typographyStyle: true,
+        colorTheme: true,
+        coverFocalPoint: true,
+        coverLayout: true,
+        titleSize: true,
+        titleColor: true,
+        customBackgroundColor: true,
+        customAccentColor: true
+      }
+    })
+
+    console.log(`✅ Design settings updated`)
 
     return NextResponse.json({
       success: true,
-      design: collection.design || null,
-      collection: collection
+      message: 'Design settings updated successfully',
+      design: {
+        gridStyle: updated.gridStyle,
+        gridColumns: updated.gridColumns,
+        thumbnailSize: updated.thumbnailSize,
+        gridSpacing: updated.gridSpacing,
+        navigationStyle: updated.navigationStyle,
+        typographyStyle: updated.typographyStyle,
+        colorTheme: updated.colorTheme,
+        coverFocalPoint: updated.coverFocalPoint,
+        coverLayout: updated.coverLayout,
+        titleSize: updated.titleSize,
+        titleColor: updated.titleColor,
+        customBackgroundColor: updated.customBackgroundColor,
+        customAccentColor: updated.customAccentColor
+      }
     })
 
   } catch (error) {
-    console.error('❌ Design get error:', error)
+    console.error('❌ UPDATE Design settings error:', error)
+
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Invalid request data', details: error.issues },
+        { status: 400 }
+      )
+    }
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
     )
   }
+}
+
+// POST method - alias for PUT
+export async function POST(
+  request: NextRequest,
+  params: { params: Promise<{ slug: string }> }
+) {
+  return PUT(request, params)
 }

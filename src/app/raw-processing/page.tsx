@@ -1,5 +1,5 @@
 "use client"
-
+import { useRef } from "react"
 import { useState, useEffect } from "react"
 import { AppLayout } from "@/components/app-layout"
 import { Button } from "@/components/ui/button"
@@ -23,6 +23,7 @@ import {
 } from "lucide-react"
 
 interface Collection {
+  id: string
   slug: string
   title: string
 }
@@ -39,6 +40,7 @@ interface RawPhoto {
   processingStatus: string
   fileSize: number
   collectionTitle?: string
+  collectionId?: string
   exifData?: {
     iso?: number
     fNumber?: number
@@ -64,12 +66,35 @@ export default function RawProcessingPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [showProcessor, setShowProcessor] = useState(false)
   const [rawPhotos, setRawPhotos] = useState<RawPhoto[]>([])
+  const [collections, setCollections] = useState<Collection[]>([])
+  const [selectedCollection, setSelectedCollection] = useState<string>("")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [isUploading, setIsUploading] = useState(false)
 
-  useEffect(() => {
-    fetchRawPhotos()
-  }, [])
+const fetchCollections = async () => {
+    try {
+      const token = localStorage.getItem('auth-token')
+      const response = await fetch('/api/collections', {
+        credentials: 'include',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setCollections(data.collections)
+        if (data.collections.length > 0 && !selectedCollection) {
+          setSelectedCollection(data.collections[0].id)
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching collections:', error)
+    }
+  }
 
   const fetchRawPhotos = async (): Promise<void> => {
     try {
@@ -83,7 +108,6 @@ export default function RawProcessingPage() {
         headers['Authorization'] = `Bearer ${token}`
       }
 
-      // Fetch all collections to get RAW photos from them
       const response = await fetch('/api/collections', {
         credentials: 'include',
         headers
@@ -96,7 +120,6 @@ export default function RawProcessingPage() {
       const data = await response.json()
       const allRawPhotos: RawPhoto[] = []
 
-      // Fetch photos from each collection and filter for RAW files
       for (const collection of data.collections as Collection[]) {
         try {
           const collectionResponse = await fetch(`/api/collections/${collection.slug}`, {
@@ -110,7 +133,8 @@ export default function RawProcessingPage() {
               .filter((photo: RawPhoto) => photo.isRaw)
               .map((photo: RawPhoto) => ({
                 ...photo,
-                collectionTitle: collection.title
+                collectionTitle: collection.title,
+                collectionId: collection.id
               }))
 
             allRawPhotos.push(...rawPhotosInCollection)
@@ -126,6 +150,78 @@ export default function RawProcessingPage() {
       setError(error instanceof Error ? error.message : 'Failed to load RAW photos')
     } finally {
       setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+  fetchCollections()
+  fetchRawPhotos()
+}, [fetchCollections, fetchRawPhotos])
+
+  
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+
+    if (!selectedCollection) {
+      alert('Please select a collection first or create one')
+      return
+    }
+
+    setIsUploading(true)
+
+    try {
+      const token = localStorage.getItem('auth-token')
+      if (!token) {
+        alert('Please login first')
+        return
+      }
+
+      let successCount = 0
+      let failCount = 0
+
+      for (const file of Array.from(files)) {
+        try {
+          const formData = new FormData()
+          formData.append('file', file)
+          formData.append('collectionId', selectedCollection)
+
+          const response = await fetch('/api/photos/upload', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`
+            },
+            body: formData
+          })
+
+          if (!response.ok) {
+            const error = await response.json()
+            throw new Error(error.error || 'Upload failed')
+          }
+
+          successCount++
+          console.log('Uploaded:', file.name)
+        } catch (error) {
+          console.error(`Failed to upload ${file.name}:`, error)
+          failCount++
+        }
+      }
+
+      await fetchRawPhotos()
+      
+      if (failCount === 0) {
+        alert(`${successCount} file(s) uploaded successfully`)
+      } else {
+        alert(`Uploaded ${successCount} file(s). ${failCount} failed.`)
+      }
+    } catch (error) {
+      console.error('Upload error:', error)
+      alert(error instanceof Error ? error.message : 'Upload failed')
+    } finally {
+      setIsUploading(false)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
     }
   }
 
@@ -168,20 +264,20 @@ export default function RawProcessingPage() {
   }
 
   const handleProcessPhoto = (photo: RawPhoto) => {
-  const photoWithUrls = {
-    ...photo,
-    webUrl: photo.thumbnailUrl,
-    originalUrl: photo.thumbnailUrl
+    const photoWithUrls = {
+      ...photo,
+      webUrl: photo.thumbnailUrl,
+      originalUrl: photo.thumbnailUrl
+    }
+    setSelectedPhoto(photoWithUrls)
+    setShowProcessor(true)
   }
-  setSelectedPhoto(photoWithUrls)
-  setShowProcessor(true)
-}
 
   const handleProcessingComplete = (processedUrl: string) => {
     console.log('Processing completed:', processedUrl)
     setShowProcessor(false)
     setSelectedPhoto(null)
-    // In a real app, we'd update the photo status in the list
+    fetchRawPhotos()
   }
 
   const statusCounts: StatusCounts = {
@@ -208,7 +304,15 @@ export default function RawProcessingPage() {
   return (
     <AppLayout>
       <div className="flex flex-col h-full">
-        {/* Header */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileUpload}
+          accept=".cr2,.crw,.nef,.arw,.dng,.raw,.rw2,.orf,.raf,.CR2,.NEF,.ARW,.DNG,.RAW"
+          multiple
+          style={{ display: 'none' }}
+        />
+
         <div className="border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="flex items-center justify-between p-6">
             <div>
@@ -221,18 +325,31 @@ export default function RawProcessingPage() {
               </p>
             </div>
             <div className="flex items-center gap-4">
-              <Button variant="outline" size="sm" className="gap-2">
-                <Settings className="h-4 w-4" />
-                Batch Process
-              </Button>
-              <Button size="sm" className="gap-2">
+              {collections.length > 0 && (
+                <select
+                  value={selectedCollection}
+                  onChange={(e) => setSelectedCollection(e.target.value)}
+                  className="px-3 py-2 border rounded-md text-sm"
+                >
+                  {collections.map((col) => (
+                    <option key={col.id} value={col.id}>
+                      {col.title}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <Button 
+                size="sm" 
+                className="gap-2"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading || collections.length === 0}
+              >
                 <Upload className="h-4 w-4" />
-                Upload RAW Files
+                {isUploading ? 'Uploading...' : 'Upload RAW Files'}
               </Button>
             </div>
           </div>
 
-          {/* Filters and Search */}
           <div className="flex items-center justify-between px-6 pb-4">
             <div className="flex items-center gap-4">
               <div className="relative">
@@ -245,7 +362,6 @@ export default function RawProcessingPage() {
                 />
               </div>
 
-              {/* Status Filters */}
               <div className="flex gap-2">
                 {[
                   { key: 'all', label: 'All' },
@@ -289,7 +405,6 @@ export default function RawProcessingPage() {
           </div>
         </div>
 
-        {/* Content */}
         <div className="flex-1 overflow-auto">
           {filteredPhotos.length === 0 ? (
             <div className="flex items-center justify-center h-64">
@@ -299,11 +414,16 @@ export default function RawProcessingPage() {
                 <p className="text-muted-foreground mb-4">
                   {searchQuery || statusFilter !== "all"
                     ? "Try adjusting your search or filter"
+                    : collections.length === 0
+                    ? "Create a collection first, then upload RAW photos"
                     : "Upload some RAW photos to get started"
                   }
                 </p>
-                {!searchQuery && statusFilter === "all" && (
-                  <Button className="gap-2">
+                {!searchQuery && statusFilter === "all" && collections.length > 0 && (
+                  <Button 
+                    className="gap-2"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
                     <Upload className="h-4 w-4" />
                     Upload RAW Files
                   </Button>
@@ -327,14 +447,12 @@ export default function RawProcessingPage() {
                           className="w-full h-full object-cover transition-transform group-hover:scale-105"
                         />
 
-                        {/* RAW Badge */}
                         <div className="absolute top-2 left-2">
                           <Badge variant="secondary" className="text-xs">
                             {photo.rawFormat || 'RAW'}
                           </Badge>
                         </div>
 
-                        {/* Status Badge */}
                         <div className="absolute top-2 right-2">
                           <Badge variant="outline" className={`text-xs ${getStatusColor(photo.processingStatus)}`}>
                             <span className="flex items-center gap-1">
@@ -344,7 +462,6 @@ export default function RawProcessingPage() {
                           </Badge>
                         </div>
 
-                        {/* Process Button Overlay */}
                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors">
                           <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                             <Button size="sm" className="gap-2">
@@ -407,9 +524,6 @@ export default function RawProcessingPage() {
                           </div>
                         </div>
                         <div className="flex gap-2">
-                          <Button variant="outline" size="sm">
-                            <Download className="h-4 w-4" />
-                          </Button>
                           <Button size="sm" className="gap-2">
                             <Zap className="h-4 w-4" />
                             Process
@@ -422,31 +536,9 @@ export default function RawProcessingPage() {
               </div>
             </div>
           )}
-
-          {filteredPhotos.length === 0 && (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center max-w-md">
-                <div className="w-24 h-24 mx-auto mb-6 bg-muted rounded-full flex items-center justify-center">
-                  <Camera className="h-12 w-12 text-muted-foreground" />
-                </div>
-                <h2 className="text-xl font-semibold text-foreground mb-2">No RAW files found</h2>
-                <p className="text-muted-foreground mb-6">
-                  {searchQuery || statusFilter !== "all"
-                    ? "Try adjusting your search or filters"
-                    : "Upload some RAW photos to get started with processing"
-                  }
-                </p>
-                <Button className="gap-2">
-                  <Upload className="h-4 w-4" />
-                  Upload RAW Files
-                </Button>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
-      {/* RAW Processor Modal */}
       {showProcessor && selectedPhoto && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-background rounded-lg w-full max-w-7xl h-[90vh] overflow-hidden">

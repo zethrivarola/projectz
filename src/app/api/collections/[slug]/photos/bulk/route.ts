@@ -1,20 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { AuthService } from '@/lib/auth'
-import { storage } from '@/lib/storage'
+import { prisma } from '@/lib/prisma'
 import fs from 'fs/promises'
 import path from 'path'
+import { z } from 'zod'
 
-// DELETE /api/collections/[slug]/photos/bulk - Bulk delete photos
+const BulkDeleteSchema = z.object({
+  photoIds: z.array(z.string()).min(1)
+})
+
+// DELETE /api/collections/[slug]/photos/bulk - Delete multiple photos
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
 ) {
-  const { slug } = await params
   try {
+    const { slug } = await params
+    
     const authHeader = request.headers.get('authorization')
     const bearerToken = authHeader?.replace('Bearer ', '')
     const cookieToken = request.cookies.get('auth-token')?.value
     const token = bearerToken || cookieToken
+
+    console.log(`🗑️ BULK DELETE from collection: ${slug}`)
 
     if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -26,96 +34,107 @@ export async function DELETE(
     }
 
     const body = await request.json()
-    const { photoIds } = body
+    const { photoIds } = BulkDeleteSchema.parse(body)
 
-    if (!Array.isArray(photoIds) || photoIds.length === 0) {
-      return NextResponse.json({ error: 'photoIds array is required' }, { status: 400 })
-    }
-
-    console.log(`Bulk delete photos request - Collection: ${slug}, Photos: ${photoIds.length}`)
-
-    // Get collection
-    const collectionsMap = await storage.getCollections()
-    const collection = Array.from(collectionsMap.values()).find(c => c.slug === slug)
+    // Get collection to verify ownership
+    const collection = await prisma.collection.findUnique({
+      where: { slug },
+      select: { id: true, ownerId: true, coverPhotoId: true }
+    })
 
     if (!collection) {
       return NextResponse.json({ error: 'Collection not found' }, { status: 404 })
     }
 
-    // Check ownership
     if (collection.ownerId !== payload.userId && payload.role !== 'admin') {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
-    const photosMap = await storage.getPhotos()
-    const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads'
-    const collectionDir = path.join(UPLOAD_DIR, collection.id)
+    // Get photos to verify they belong to this collection
+    const photos = await prisma.photo.findMany({
+      where: {
+        id: { in: photoIds },
+        collectionId: collection.id
+      },
+      select: {
+        id: true,
+        filename: true,
+        originalFilename: true
+      }
+    })
+
+    if (photos.length === 0) {
+      return NextResponse.json({ error: 'No photos found to delete' }, { status: 404 })
+    }
+
+    // Delete physical files
+    const uploadDir = process.env.UPLOAD_DIR || './uploads'
+    const collectionDir = path.join(uploadDir, collection.id)
     
-    let deletedCount = 0
-    let deletedFiles = 0
-    let wasCoverPhotoDeleted = false
-
-    for (const photoId of photoIds) {
-      const photo = photosMap.get(photoId)
-      
-      if (!photo) {
-        console.log(`Photo not found: ${photoId}`)
-        continue
-      }
-
-      if (photo.collectionId !== collection.id) {
-        console.log(`Photo ${photoId} does not belong to collection ${collection.id}`)
-        continue
-      }
-
-      // Delete physical files
+    for (const photo of photos) {
       const filesToDelete = [
-        path.join(collectionDir, 'thumbnails', `thumb_${photo.filename}`),
-        path.join(collectionDir, 'web', `web_${photo.filename}`),
-        path.join(collectionDir, 'originals', photo.filename)
+        path.join(collectionDir, 'original', photo.filename),
+        path.join(collectionDir, 'thumbnails', `thumb_${photo.filename.replace(/\.[^.]+$/, '.jpg')}`),
+        path.join(collectionDir, 'web', `web_${photo.filename.replace(/\.[^.]+$/, '.jpg')}`),
+        path.join(collectionDir, 'high-res', `highres_${photo.filename.replace(/\.[^.]+$/, '.jpg')}`)
       ]
 
       for (const filePath of filesToDelete) {
         try {
           await fs.unlink(filePath)
-          deletedFiles++
         } catch (error) {
-          console.log(`Could not delete file: ${filePath}`)
+          console.log(`⚠️ Could not delete file: ${filePath}`)
         }
       }
+    }
 
-      // Check if this was the cover photo
-      if (collection.coverPhoto?.id === photo.id) {
-        wasCoverPhotoDeleted = true
+    // Use transaction to delete photos and update collection
+    const result = await prisma.$transaction(async (tx) => {
+      // Delete photos
+      const deleteResult = await tx.photo.deleteMany({
+        where: { id: { in: photoIds } }
+      })
+
+      // If cover photo was deleted, update collection
+      if (photoIds.includes(collection.coverPhotoId || '')) {
+        const remainingPhoto = await tx.photo.findFirst({
+          where: { collectionId: collection.id },
+          orderBy: { orderIndex: 'asc' },
+          select: { id: true }
+        })
+
+        await tx.collection.update({
+          where: { id: collection.id },
+          data: {
+            coverPhotoId: remainingPhoto?.id || null,
+            updatedAt: new Date()
+          }
+        })
       }
 
-      // Delete photo from storage
-      await storage.deletePhoto(photo.id)
-      deletedCount++
-      console.log(`Deleted photo: ${photo.filename}`)
-    }
+      return deleteResult
+    })
 
-    // If cover photo was deleted, remove it from collection
-    if (wasCoverPhotoDeleted) {
-      await storage.updateCollection(collection.id, {
-        coverPhoto: undefined
-      })
-    }
+    console.log(`✅ Bulk deleted ${result.count} photos`)
 
-    console.log(`Successfully bulk deleted ${deletedCount} photos`)
-
-    return NextResponse.json({
+    return NextResponse.json({ 
       success: true,
-      message: `${deletedCount} photo${deletedCount !== 1 ? 's' : ''} deleted successfully`,
-      deletedCount,
-      deletedFiles,
-      coverPhotoRemoved: wasCoverPhotoDeleted
+      message: 'Photos deleted successfully',
+      deletedCount: result.count
     })
 
   } catch (error) {
-    console.error('Bulk photo deletion error:', error)
+    console.error('❌ BULK DELETE error:', error)
+
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Invalid request data', details: error.issues },
+        { status: 400 }
+      )
+    }
+
     return NextResponse.json(
-      { error: 'Failed to delete photos' },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }

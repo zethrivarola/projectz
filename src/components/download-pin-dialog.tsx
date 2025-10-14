@@ -9,6 +9,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -204,13 +205,18 @@ export function DownloadPinDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Download className="h-5 w-5" />
-            {step === 'request' && 'Request Download'}
-            {step === 'pin_generated' && 'Download PIN Generated'}
-            {step === 'verify_pin' && 'Enter Download PIN'}
-          </DialogTitle>
-        </DialogHeader>
+  <DialogTitle className="flex items-center gap-2">
+    <Download className="h-5 w-5" />
+    {step === 'request' && 'Request Download'}
+    {step === 'pin_generated' && 'Download PIN Generated'}
+    {step === 'verify_pin' && 'Enter Download PIN'}
+  </DialogTitle>
+  <DialogDescription>
+    {step === 'request' && 'Generate a secure PIN to download your photo'}
+    {step === 'pin_generated' && 'Use this PIN to securely download your photo'}
+    {step === 'verify_pin' && 'Enter the 4-digit PIN to start your download'}
+  </DialogDescription>
+</DialogHeader>
 
         {step === 'request' && (
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

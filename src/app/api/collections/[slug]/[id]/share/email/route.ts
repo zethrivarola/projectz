@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/db'
+import { prisma } from '@/lib/prisma'
 import { AuthService } from '@/lib/auth'
 
 // POST /api/collections/[slug]/[id]/share/email - Send share email

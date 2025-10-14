@@ -1,120 +1,133 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { AuthService } from '@/lib/auth'
-import { storage } from '@/lib/storage'
-import fs from 'fs/promises'
-import path from 'path'
-import { Share } from '@/types/share'
+import { prisma } from '@/lib/prisma'
+import { z } from 'zod'
 
+const UpdateCollectionSchema = z.object({
+  title: z.string().min(1).optional(),
+  description: z.string().optional(),
+  visibility: z.enum(['public', 'private', 'password_protected']).optional(),
+  password: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  dateTaken: z.string().datetime().optional(),
+  isStarred: z.boolean().optional(),
+  isFeatured: z.boolean().optional(),
+})
 
-interface Collection {
-  id: string
-  title: string
-  description?: string
-  slug: string
-  visibility: string
-  isStarred: boolean
-  isFeatured: boolean
-  tags: string[]
-  createdAt: Date
-  updatedAt: Date
-  coverPhoto?: unknown
-  design?: unknown
-  ownerId: string
-  [key: string]: unknown
-}
-
-
-
-// GET /api/collections/[slug] - Get collection by slug
+// GET /api/collections/[slug] - Get single collection with photos (PUBLIC + ADMIN)
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
 ) {
-  const { slug } = await params
   try {
-    // Get token from Authorization header or cookies
+    const { slug } = await params
     const authHeader = request.headers.get('authorization')
     const bearerToken = authHeader?.replace('Bearer ', '')
     const cookieToken = request.cookies.get('auth-token')?.value
     const token = bearerToken || cookieToken
 
-    console.log('Collection detail - Auth header:', authHeader ? 'Present' : 'Missing')
-    console.log('Collection detail - Cookie:', cookieToken ? 'Present' : 'Missing')
-    console.log('Collection detail - Slug:', slug)
+    console.log(`🔍 GET Collection by slug: ${slug}`)
 
-    if (!token) {
-      console.log('Collection detail - No token found')
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    // Try to verify token (optional for public collections)
+    let payload = null
+    if (token) {
+      payload = AuthService.verifyToken(token)
     }
 
-    const payload = AuthService.verifyToken(token)
-    if (!payload) {
-      console.log('Collection detail - Invalid token')
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
-    }
-
-    console.log(`Fetching collection with slug: ${slug} for user: ${payload.email}`)
-
-    // Look for collection in persistent storage
-    const collectionsMap = await storage.getCollections()
-    const collection = Array.from(collectionsMap.values()).find(c => c.slug === slug) as Collection | undefined
+    // Get collection with photos
+    const collection = await prisma.collection.findUnique({
+      where: { slug },
+      include: {
+        photos: {
+          where: { processingStatus: 'completed' },
+          orderBy: { orderIndex: 'asc' },
+          select: {
+            id: true,
+            filename: true,
+            originalFilename: true,
+            thumbnailUrl: true,
+            webUrl: true,
+            highResUrl: true,
+            originalUrl: true,
+            width: true,
+            height: true,
+            isRaw: true,
+            orderIndex: true,
+            isStarred: true,
+            processingStatus: true,
+            createdAt: true,
+          }
+        },
+        coverPhoto: {
+          select: {
+            id: true,
+            thumbnailUrl: true,
+            webUrl: true
+          }
+        },
+        _count: {
+          select: { photos: true }
+        }
+      }
+    })
 
     if (!collection) {
-      console.log(`Collection not found: ${slug}`)
-      console.log(`Available collections: ${Array.from(collectionsMap.values()).map(c => c.slug).join(', ')}`)
+      console.log(`❌ Collection not found: ${slug}`)
       return NextResponse.json({ error: 'Collection not found' }, { status: 404 })
     }
 
-    // Check ownership
-    if (collection.ownerId !== payload.userId && payload.role !== 'admin') {
-      console.log(`Access denied to collection: ${slug}`)
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    // Check access permissions
+    const isOwner = payload && collection.ownerId === payload.userId
+    const isAdmin = payload && payload.role === 'admin'
+    const isPublic = collection.visibility === 'public'
+
+    // If not public and user is not owner/admin, deny access
+    if (!isPublic && !isOwner && !isAdmin) {
+      console.log(`❌ Access denied: Collection is ${collection.visibility}`)
+      return NextResponse.json({ error: 'This collection is private' }, { status: 403 })
     }
 
-    // Get real uploaded photos from persistent storage
-    const photosMap = await storage.getPhotos()
-    const photos = Array.from(photosMap.values())
-      .filter(p => p.collectionId === collection.id)
-      .sort((a, b) => a.orderIndex - b.orderIndex)
+    console.log(`✅ Collection found: ${collection.title} with ${collection.photos.length} photos`)
 
-    if (photos.length > 0) {
-      console.log(`Found ${photos.length} uploaded photos for collection ${collection.slug}`)
-    } else {
-      console.log(`No photos found for collection ${collection.slug}`)
-    }
-
-    console.log(`Collection found: ${collection.title} with ${photos.length} photos`)
-
-    // Add design settings logging
-    if (collection.design) {
-      console.log(`Design settings found for ${collection.slug}:`, collection.design)
-    } else {
-      console.log(`No design settings for ${collection.slug}`)
-    }
-
+    // Return in gallery format (matching the shared gallery structure)
     return NextResponse.json({
-      collection: {
-        id: collection.id,
-        title: collection.title,
-        description: collection.description,
-        slug: collection.slug,
-        visibility: collection.visibility,
-        isStarred: collection.isStarred,
-        isFeatured: collection.isFeatured,
-        tags: collection.tags,
-        createdAt: collection.createdAt,
-        updatedAt: collection.updatedAt,
-        coverPhoto: collection.coverPhoto,
-        design: collection.design,
-        _count: {
-          photos: photos.length
-        }
+  collection: {
+    id: collection.id,
+    title: collection.title,
+    description: collection.description,
+    slug: collection.slug,
+    coverPhoto: collection.coverPhoto,
+    tags: collection.tags,
+    dateTaken: collection.dateTaken,
+    createdAt: collection.createdAt,
+    updatedAt: collection.updatedAt,
+    visibility: collection.visibility,
+    isStarred: collection.isStarred,
+    isFeatured: collection.isFeatured,
+    _count: collection._count,
+    design: {
+      coverLayout: collection.coverLayout || 'center',
+      typography: {
+        titleFont: collection.typographyStyle || 'Inter',
+        titleSize: collection.titleSize || 48,
+        titleColor: collection.titleColor || '#ffffff'
       },
-      photos
-    })
+      colors: {
+        background: collection.customBackgroundColor || '#ffffff',
+        accent: collection.customAccentColor || '#000000'
+      },
+      grid: {
+        columns: collection.gridColumns || 4,
+        spacing: collection.gridSpacing || 8
+      },
+      coverFocus: collection.coverFocalPoint || { x: 50, y: 50 }
+    }
+  },
+  photos: collection.photos
+})
 
   } catch (error) {
-    console.error('Collection detail error:', error)
+    console.error('❌ GET Collection error:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -122,140 +135,163 @@ export async function GET(
   }
 }
 
-// DELETE /api/collections/[slug] - Delete collection and all its photos
-export async function DELETE(
+// PATCH /api/collections/[slug] - Update collection (ADMIN ONLY)
+export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
 ) {
-  const { slug } = await params
   try {
+    const { slug } = await params
     const authHeader = request.headers.get('authorization')
     const bearerToken = authHeader?.replace('Bearer ', '')
     const cookieToken = request.cookies.get('auth-token')?.value
     const token = bearerToken || cookieToken
 
-    console.log(`Delete request for collection: ${slug}`)
+    console.log(`🔍 PATCH Collection: ${slug}`)
 
     if (!token) {
-      console.log('Delete - No token found')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const payload = AuthService.verifyToken(token)
     if (!payload) {
-      console.log('Delete - Invalid token')
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
 
-    console.log(`Delete collection ${slug} for user: ${payload.email}`)
+    const body = await request.json()
+    const data = UpdateCollectionSchema.parse(body)
 
-    // Get collections from storage
-    const collectionsMap = await storage.getCollections()
-    const collection = Array.from(collectionsMap.values()).find(c => c.slug === slug) as Collection | undefined
+    // Check if collection exists and user owns it
+    const existingCollection = await prisma.collection.findUnique({
+      where: { slug }
+    })
 
-    if (!collection) {
-      console.log(`Collection not found for deletion: ${slug}`)
+    if (!existingCollection) {
       return NextResponse.json({ error: 'Collection not found' }, { status: 404 })
     }
 
-    // Check ownership
-    if (collection.ownerId !== payload.userId && payload.role !== 'admin') {
-      console.log(`Access denied for deletion: ${slug}`)
+    if (existingCollection.ownerId !== payload.userId && payload.role !== 'admin') {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
-    // Get all photos in this collection
-    const photosMap = await storage.getPhotos()
-    const collectionPhotos = Array.from(photosMap.values())
-      .filter(p => p.collectionId === collection.id)  // Removed the type assertion
-
-    console.log(`Found ${collectionPhotos.length} photos to delete with collection`)
-
-    // Delete physical photo files from filesystem
-    const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads'
-    let deletedFiles = 0
-
-    for (const photo of collectionPhotos) {
-      try {
-        // Delete all variants of the photo
-        const collectionDir = path.join(UPLOAD_DIR, collection.id)
-        const filesToDelete = [
-          path.join(collectionDir, 'thumbnails', `thumb_${photo.filename}`),
-          path.join(collectionDir, 'web', `web_${photo.filename}`),
-          path.join(collectionDir, 'originals', photo.filename)
-        ]
-
-        for (const filePath of filesToDelete) {
-          try {
-            await fs.unlink(filePath)
-            console.log(`Deleted file: ${filePath}`)
-            deletedFiles++
-          } catch (error) {
-            // File might not exist, continue
-            console.log(`Could not delete file: ${filePath}`)
-          }
-        }
-
-        // Delete photo from storage
-        await storage.deletePhoto(photo.id)
-        console.log(`Deleted photo record: ${photo.filename}`)
-
-      } catch (error) {
-        console.error(`Error deleting photo ${photo.filename}:`, error)
-      }
+    // Handle password
+    let passwordHash = existingCollection.passwordHash
+    if (data.visibility === 'password_protected' && data.password) {
+      passwordHash = await AuthService.hashPassword(data.password)
+    } else if (data.visibility !== 'password_protected') {
+      passwordHash = null
     }
 
-    // Try to delete collection directory if empty
-    try {
-      const collectionDir = path.join(UPLOAD_DIR, collection.id)
-      const subdirs = ['thumbnails', 'web', 'originals']
-      
-      for (const subdir of subdirs) {
-        try {
-          await fs.rmdir(path.join(collectionDir, subdir))
-        } catch (error) {
-          // Directory might not be empty or not exist
+    // Update collection
+    const updatedCollection = await prisma.collection.update({
+      where: { slug },
+      data: {
+        title: data.title,
+        description: data.description,
+        visibility: data.visibility,
+        passwordHash,
+        tags: data.tags,
+        dateTaken: data.dateTaken ? new Date(data.dateTaken) : undefined,
+        isStarred: data.isStarred,
+        isFeatured: data.isFeatured,
+        updatedAt: new Date()
+      },
+      include: {
+        _count: {
+          select: { photos: true }
         }
       }
-      
-      await fs.rmdir(collectionDir)
-      console.log(`Deleted collection directory: ${collectionDir}`)
-    } catch (error) {
-      console.log(`Could not delete collection directory (may not be empty)`)
-    }
+    })
 
-    // Delete any associated share links
-    const sharesMap = await storage.getShares()
-	
-	// Agregamos esto para inspeccionar un share real
-console.log('Ejemplo de share:', Array.from(sharesMap.values())[0])
-
-    const collectionShares = Array.from(sharesMap.values())
-      .filter(share => share.collectionId === collection.id) as Share[]
-
-    for (const share of collectionShares) {
-      await storage.deleteShare(share.shareToken)
-      console.log(`Deleted share link: ${share.shareToken}`)
-    }
-
-    // Finally, delete the collection itself
-    await storage.deleteCollection(collection.id)
-    console.log(`Deleted collection: ${collection.title}`)
-
-    console.log(`Successfully deleted collection "${collection.title}" with ${collectionPhotos.length} photos and ${deletedFiles} files`)
+    console.log(`✅ Collection updated: ${updatedCollection.title}`)
 
     return NextResponse.json({
-      success: true,
-      message: `Collection "${collection.title}" and all associated data has been deleted`,
-      deletedPhotos: collectionPhotos.length,
-      deletedFiles: deletedFiles,
-      deletedShares: collectionShares.length
+      id: updatedCollection.id,
+      title: updatedCollection.title,
+      description: updatedCollection.description,
+      slug: updatedCollection.slug,
+      visibility: updatedCollection.visibility,
+      isStarred: updatedCollection.isStarred,
+      isFeatured: updatedCollection.isFeatured,
+      tags: updatedCollection.tags,
+      dateTaken: updatedCollection.dateTaken,
+      createdAt: updatedCollection.createdAt,
+      updatedAt: updatedCollection.updatedAt,
+      _count: updatedCollection._count
     })
 
   } catch (error) {
-    console.error('Collection deletion error:', error)
+    console.error('❌ PATCH Collection error:', error)
+
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Invalid request data', details: error.issues },
+        { status: 400 }
+      )
+    }
+
     return NextResponse.json(
-      { error: 'Failed to delete collection' },
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
+// DELETE /api/collections/[slug] - Delete collection (ADMIN ONLY)
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ slug: string }> }
+) {
+  try {
+    const { slug } = await params
+    const authHeader = request.headers.get('authorization')
+    const bearerToken = authHeader?.replace('Bearer ', '')
+    const cookieToken = request.cookies.get('auth-token')?.value
+    const token = bearerToken || cookieToken
+
+    console.log(`🔍 DELETE Collection: ${slug}`)
+
+    if (!token) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const payload = AuthService.verifyToken(token)
+    if (!payload) {
+      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+    }
+
+    // Check if collection exists and user owns it
+    const collection = await prisma.collection.findUnique({
+      where: { slug },
+      include: {
+        photos: true
+      }
+    })
+
+    if (!collection) {
+      return NextResponse.json({ error: 'Collection not found' }, { status: 404 })
+    }
+
+    if (collection.ownerId !== payload.userId && payload.role !== 'admin') {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    }
+
+    // Delete collection (cascade will delete photos)
+    await prisma.collection.delete({
+      where: { slug }
+    })
+
+    console.log(`✅ Collection deleted: ${collection.title}`)
+
+    return NextResponse.json({ 
+      message: 'Collection deleted successfully',
+      deletedPhotos: collection.photos.length
+    })
+
+  } catch (error) {
+    console.error('❌ DELETE Collection error:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }

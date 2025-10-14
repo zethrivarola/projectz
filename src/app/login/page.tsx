@@ -29,7 +29,7 @@ export default function LoginPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include', // Important: Include cookies
+        credentials: 'include',
         body: JSON.stringify({ email, password }),
       })
 
@@ -41,39 +41,24 @@ export default function LoginPage() {
       const data = await response.json()
       console.log('✅ Login successful:', data.user)
 
-      // Set token in localStorage as backup
+      // Guardar token y datos del usuario
       if (data.token) {
         localStorage.setItem('auth-token', data.token)
         console.log('💾 Token saved to localStorage')
       }
 
-      // Verify authentication immediately
-      console.log('🔍 Verifying authentication...')
-
-      // Wait a brief moment for cookie to be properly set
-      await new Promise(resolve => setTimeout(resolve, 200))
-
-      const authCheck = await fetch('/api/auth/me', {
-        credentials: 'include',
-        headers: {
-          'Authorization': `Bearer ${data.token}`,
-          'Cache-Control': 'no-cache'
-        }
-      })
-
-      if (authCheck.ok) {
-        const authData = await authCheck.json()
-        console.log('✅ Authentication verified:', authData.user.email)
-        console.log('🔑 Token info:', authData.tokenInfo)
-
-        // Successful authentication - redirect with page refresh
-        console.log('📍 Redirecting to collections...')
-        window.location.href = '/collections'
-      } else {
-        const errorData = await authCheck.json().catch(() => ({ error: 'Unknown error' }))
-        console.error('❌ Auth verification failed:', errorData)
-        throw new Error(`Authentication verification failed: ${errorData.error}`)
+      if (data.user) {
+        localStorage.setItem('user', JSON.stringify(data.user))
+        console.log('👤 User saved to localStorage')
       }
+
+      console.log('✅ All authentication data saved successfully')
+
+      // Redirigir según el rol del usuario
+      const redirectUrl = data.user.role === 'SUPER_ADMIN' ? '/admin' : '/collections'
+      console.log(`🚀 Redirecting to ${redirectUrl} (role: ${data.user.role})`)
+      
+      window.location.href = redirectUrl
 
     } catch (error) {
       console.error('❌ Login error:', error)
@@ -81,11 +66,6 @@ export default function LoginPage() {
     } finally {
       setIsLoading(false)
     }
-  }
-
-  const quickLogin = (userEmail: string, userPassword: string) => {
-    setEmail(userEmail)
-    setPassword(userPassword)
   }
 
   return (
@@ -96,12 +76,12 @@ export default function LoginPage() {
             <Camera className="h-8 w-8 text-primary" />
             <div>
               <h1 className="text-xl font-semibold">René Rivarola Photography</h1>
-              <p className="text-sm text-muted-foreground">Personal Portfolio</p>
+              <p className="text-sm text-muted-foreground">Management Portal</p>
             </div>
           </div>
           <CardTitle>Welcome Back</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Sign in to access your personal photography portfolio
+            Sign in to manage your photography collections
           </p>
         </CardHeader>
         <CardContent>
@@ -115,6 +95,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                autoComplete="email"
               />
             </div>
 
@@ -124,10 +105,11 @@ export default function LoginPage() {
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
-                  placeholder="your-password"
+                  placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  autoComplete="current-password"
                 />
                 <Button
                   type="button"
@@ -155,32 +137,6 @@ export default function LoginPage() {
               {isLoading ? "Signing in..." : "Sign In"}
             </Button>
           </form>
-
-          <div className="mt-6">
-            <div className="text-sm text-muted-foreground mb-3">
-              Quick Access (click to auto-fill):
-            </div>
-            <div className="space-y-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full justify-start text-left"
-                onClick={() => quickLogin('photographer@demo.com', 'demo123')}
-                disabled={isLoading}
-              >
-                <div>
-                  <div className="font-medium">Personal Portfolio</div>
-                  <div className="text-xs text-muted-foreground">photographer@demo.com</div>
-                </div>
-              </Button>
-            </div>
-          </div>
-
-          <div className="mt-6 text-center">
-            <div className="text-xs text-muted-foreground">
-              Your personal photography portfolio system
-            </div>
-          </div>
         </CardContent>
       </Card>
     </div>

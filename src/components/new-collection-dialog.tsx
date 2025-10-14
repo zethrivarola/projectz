@@ -9,6 +9,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -107,8 +108,11 @@ export function NewCollectionDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>NEW COLLECTION</DialogTitle>
-        </DialogHeader>
+  <DialogTitle>NEW COLLECTION</DialogTitle>
+  <DialogDescription>
+    Create a new collection to organize and share your photos
+  </DialogDescription>
+</DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-2">
@@ -155,3 +159,4 @@ export function NewCollectionDialog({
     </Dialog>
   )
 }
+

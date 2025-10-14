@@ -3,34 +3,23 @@
 import { useState, useEffect, useCallback } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { AppLayout } from "@/components/app-layout"
 import { Button } from "@/components/ui/button"
-import { ShareCollectionDialog } from "@/components/share-collection-dialog"
-import { RawProcessorInterface } from "@/components/raw-processor-interface"
-import { PhotoGallery } from "@/components/photo-gallery"
-import { PhotoManagement } from "@/components/photo-management"
-import { CoverPhotoSelector } from "@/components/cover-photo-selector"
-import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Checkbox } from "@/components/ui/checkbox"
 import {
-  ArrowLeft,
-  Share2,
-  MoreVertical,
-  Grid3x3,
-  List,
-  Plus,
-  Settings,
   Download,
-  Star,
+  Heart,
+  Share2,
   Camera,
-  Zap,
-  Loader2,
-  Eye,
-  Clock,
-  Trash2,
-  CheckSquare,
+  Download as DownloadIcon,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  ZoomIn,
+  ZoomOut,
+  RotateCw,
+  Maximize2,
+  ArrowLeft,
+  Check,
   Square
 } from "lucide-react"
 
@@ -39,12 +28,6 @@ interface Collection {
   title: string
   description?: string
   slug: string
-  visibility: string
-  isStarred: boolean
-  isFeatured: boolean
-  tags: string[]
-  createdAt: Date
-  updatedAt: Date
   coverPhoto?: {
     id: string
     thumbnailUrl: string
@@ -81,121 +64,52 @@ interface Photo {
   originalFilename: string
   thumbnailUrl: string
   webUrl: string
+  highResUrl: string
   originalUrl: string
-  aspectRatio?: string
-  width?: number
-  height?: number
-  isRaw: boolean
-  rawFormat?: string
-  processingStatus: string
-  collectionId: string
-  orderIndex: number
-  createdAt: Date
-  uploadedAt?: Date
-  metadata?: Record<string, unknown>
 }
 
-export default function CollectionDetailPage() {
+export default function PublicCollectionPage() {
   const params = useParams()
-  const slug = params.slug as string
   const router = useRouter()
+  const slug = params.slug as string
+  
   const [collection, setCollection] = useState<Collection | null>(null)
   const [photos, setPhotos] = useState<Photo[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState("")
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
-  const [showShareDialog, setShowShareDialog] = useState(false)
+  const [error, setError] = useState('')
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null)
-  const [showRawProcessor, setShowRawProcessor] = useState(false)
-  const [showGallery, setShowGallery] = useState(false)
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0)
-  const [showBatchProcessor, setShowBatchProcessor] = useState(false)
-  const [activeTab, setActiveTab] = useState<"view" | "manage">("view")
-  const [showCoverSelector, setShowCoverSelector] = useState(false)
   
-  // Bulk selection state
-  const [selectionMode, setSelectionMode] = useState(false)
+  const [zoom, setZoom] = useState(1)
+  const [rotation, setRotation] = useState(0)
+  
+  const [favorites, setFavorites] = useState<Set<string>>(new Set())
   const [selectedPhotos, setSelectedPhotos] = useState<Set<string>>(new Set())
-  const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false)
+  const [showFavorites, setShowFavorites] = useState(false)
+  const [downloadingFavorites, setDownloadingFavorites] = useState(false)
+  const [downloadFormat, setDownloadFormat] = useState<'web' | 'original'>('original')
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false)
 
-  // Get design settings with defaults
-  const getDesignSettings = () => {
-    const defaultDesign = {
-      coverLayout: 'center',
-      typography: {
-        titleFont: 'Playfair Display',
-        titleSize: 48,
-        titleColor: '#ffffff'
-      },
-      colors: {
-        background: '#ffffff',
-        accent: '#000000'
-      },
-      grid: {
-        columns: 4,
-        spacing: 12
-      },
-      coverFocus: {
-        x: 50,
-        y: 50
-      }
-    }
-
-    return collection?.design || defaultDesign
-  }
-
-  
-
-  const getAuthHeaders = useCallback(() => {
-  const token = localStorage.getItem('auth-token')
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-  }
-
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`
-  }
-
-  return headers
-}, [])
-
-  const fetchCollection = useCallback(async () => {
+  const fetchCollection = useCallback(async () => { 
     try {
       setLoading(true)
-      setError("")
+      setError('')
 
-      console.log(`Fetching collection: ${slug}`)
-
-      const response = await fetch(`/api/collections/${slug}`, {
-        credentials: 'include',
-        headers: getAuthHeaders()
-      })
-
-      console.log(`Collection response status: ${response.status}`)
-
-      if (response.status === 401) {
-        console.log('Authentication failed, redirecting to login')
-        router.push('/login')
-        return
-      }
-
-      if (response.status === 404) {
-        setError('Collection not found')
-        return
-      }
+      const response = await fetch(`/api/collections/${slug}`)
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch collection (${response.status})`)
+        if (response.status === 404) {
+          throw new Error('Collection not found')
+        }
+        if (response.status === 403) {
+          throw new Error('This collection is private')
+        }
+        throw new Error('Failed to load collection')
       }
 
       const data = await response.json()
       setCollection(data.collection)
       setPhotos(data.photos || [])
-
-      console.log(`Collection loaded: ${data.collection.title} with ${data.photos?.length || 0} photos`)
-      if (data.collection.design) {
-        console.log('Design settings loaded:', data.collection.design)
-      }
 
     } catch (error) {
       console.error('Error fetching collection:', error)
@@ -203,821 +117,883 @@ export default function CollectionDetailPage() {
     } finally {
       setLoading(false)
     }
-  }, [slug, router, setLoading, setError, setCollection, setPhotos, getAuthHeaders]);
+  }, [slug])
 
-useEffect(() => {
-    if (params.slug) {
-      fetchCollection()
+  const loadFavorites = useCallback(() => {
+    try {
+      const stored = localStorage.getItem(`favorites_${slug}`)
+      if (stored) {
+        setFavorites(new Set(JSON.parse(stored)))
+      }
+    } catch (error) {
+      console.error('Error loading favorites:', error)
     }
-  }, [params.slug, fetchCollection])
-  
-  const handlePhotoClick = (photo: Photo) => {
-    if (selectionMode) {
-      togglePhotoSelection(photo.id)
-      return
+  }, [slug])
+
+  const navigatePhoto = useCallback((direction: number) => {
+    if (photos.length === 0) return
+    const newIndex = (currentPhotoIndex + direction + photos.length) % photos.length
+    setCurrentPhotoIndex(newIndex)
+    setSelectedPhoto(photos[newIndex])
+    setZoom(1)
+    setRotation(0)
+  }, [currentPhotoIndex, photos])
+
+  useEffect(() => {
+    fetchCollection()
+    loadFavorites()
+  }, [fetchCollection, loadFavorites])
+
+  useEffect(() => {
+    if (!selectedPhoto) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      switch (e.key) {
+        case 'Escape':
+          handleCloseLightbox()
+          break
+        case 'ArrowLeft':
+          e.preventDefault()
+          navigatePhoto(-1)
+          break
+        case 'ArrowRight':
+          e.preventDefault()
+          navigatePhoto(1)
+          break
+        case ' ':
+          e.preventDefault()
+          navigatePhoto(1)
+          break
+        case '=':
+        case '+':
+          e.preventDefault()
+          setZoom(prev => Math.min(prev * 1.2, 5))
+          break
+        case '-':
+          e.preventDefault()
+          setZoom(prev => Math.max(prev / 1.2, 0.1))
+          break
+        case 'r':
+        case 'R':
+          e.preventDefault()
+          setRotation(prev => (prev + 90) % 360)
+          break
+      }
     }
-    
-    const photoIndex = photos.findIndex(p => p.id === photo.id)
-    setCurrentPhotoIndex(photoIndex)
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [selectedPhoto, navigatePhoto])
+
+  const handleCloseLightbox = () => {
+    setSelectedPhoto(null)
+    setZoom(1)
+    setRotation(0)
+  }
+
+  const saveFavorites = (newFavorites: Set<string>) => {
+    try {
+      localStorage.setItem(`favorites_${slug}`, JSON.stringify(Array.from(newFavorites)))
+    } catch (error) {
+      console.error('Error saving favorites:', error)
+    }
+  }
+
+  const handlePhotoClick = (photo: Photo, index: number) => {
     setSelectedPhoto(photo)
-    setShowGallery(true)
+    setCurrentPhotoIndex(index)
   }
 
-  // Selection mode functions
-  const toggleSelectionMode = () => {
-    setSelectionMode(!selectionMode)
-    if (selectionMode) {
-      setSelectedPhotos(new Set())
+  const handleDownload = async (photo: Photo, format: 'web' | 'original' = 'original') => {
+    try {
+      const url = format === 'original' ? photo.originalUrl : photo.webUrl
+      const response = await fetch(url)
+      const blob = await response.blob()
+
+      const link = document.createElement('a')
+      link.href = URL.createObjectURL(blob)
+      link.download = photo.originalFilename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(link.href)
+    } catch (error) {
+      console.error('Download failed:', error)
+      alert('Failed to download photo')
     }
   }
 
-  const togglePhotoSelection = (photoId: string) => {
-    const newSelected = new Set(selectedPhotos)
-    if (newSelected.has(photoId)) {
-      newSelected.delete(photoId)
+  const toggleFavorite = (photoId: string) => {
+    const newFavorites = new Set(favorites)
+    if (newFavorites.has(photoId)) {
+      newFavorites.delete(photoId)
     } else {
-      newSelected.add(photoId)
+      newFavorites.add(photoId)
     }
-    setSelectedPhotos(newSelected)
+    setFavorites(newFavorites)
+    saveFavorites(newFavorites)
   }
 
-  const selectAllPhotos = () => {
-    const allPhotoIds = new Set(photos.map(p => p.id))
-    setSelectedPhotos(allPhotoIds)
+  const toggleSelection = (photoId: string) => {
+    const newSelection = new Set(selectedPhotos)
+    if (newSelection.has(photoId)) {
+      newSelection.delete(photoId)
+    } else {
+      newSelection.add(photoId)
+    }
+    setSelectedPhotos(newSelection)
   }
 
-  const deselectAllPhotos = () => {
+  const selectAll = () => {
+    setSelectedPhotos(new Set(photos.map(p => p.id)))
+  }
+
+  const clearSelection = () => {
     setSelectedPhotos(new Set())
   }
 
-  const handleBulkDelete = async () => {
-    if (!collection || selectedPhotos.size === 0) {
-      return
+  const handleClearFavorites = () => {
+    if (confirm('Clear all favorites? This cannot be undone.')) {
+      setFavorites(new Set())
+      saveFavorites(new Set())
     }
+  }
 
-    const photoCount = selectedPhotos.size
-    const photoText = photoCount === 1 ? 'photo' : 'photos'
-
-    if (!confirm(`Are you sure you want to delete ${photoCount} ${photoText}? This action cannot be undone.`)) {
-      return
-    }
-
-    setBulkDeleteLoading(true)
-
+  const handleDownloadAsZip = async (photoIds?: string[]) => {
+    setDownloadingFavorites(true)
+    
     try {
-      console.log(`Bulk deleting ${photoCount} photos from collection: ${collection.slug}`)
-      
-      const token = localStorage.getItem('auth-token')
-      if (!token) {
-        throw new Error('No authentication token found')
-      }
+      const photoCount = photoIds ? photoIds.length : photos.length
+      console.log(`📦 Starting ZIP download: ${photoCount} photos in ${downloadFormat} format`)
 
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      }
-
-      // Use the enhanced DELETE endpoint that accepts photoIds in body
-      const response = await fetch(`/api/collections/${collection.slug}/photos/bulk`, {
-        method: 'DELETE',
-        headers,
-        credentials: 'include',
+      const response = await fetch(`/api/collections/${slug}/download`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({
-          photoIds: Array.from(selectedPhotos)
+          format: downloadFormat,
+          photoIds: photoIds
         })
       })
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Failed to parse error response' }))
-        throw new Error(errorData.error || `Server error: ${response.status}`)
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to generate ZIP')
       }
 
-      const data = await response.json()
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `${collection?.slug}-${downloadFormat}.zip`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
 
-      if (data.success) {
-        // Remove deleted photos from local state
-        setPhotos(prev => prev.filter(p => !selectedPhotos.has(p.id)))
-        
-        // Clear cover photo if it was deleted
-        if (collection.coverPhoto && selectedPhotos.has(collection.coverPhoto.id)) {
-          setCollection(prev => prev ? {
-            ...prev,
-            coverPhoto: undefined
-          } : prev)
-        }
-        
-        // Exit selection mode and clear selections
-        setSelectionMode(false)
-        setSelectedPhotos(new Set())
-        
-        console.log(`Successfully deleted ${data.deletedCount} photos`)
-      }
+      console.log('✅ ZIP download completed')
 
     } catch (error) {
-      console.error('Error bulk deleting photos:', error)
-      alert(`Failed to delete photos: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      console.error('❌ ZIP download error:', error)
+      alert(error instanceof Error ? error.message : 'Failed to download ZIP. Please try again.')
     } finally {
-      setBulkDeleteLoading(false)
+      setDownloadingFavorites(false)
     }
   }
 
-  const handleSetCover = async (photoId: string) => {
-    if (!collection) {
-      console.error('No collection available')
-      return
-    }
+  const handleDownloadFavorites = async () => {
+    if (favorites.size === 0) return
+
+    setDownloadingFavorites(true)
+    const favoritePhotos = photos.filter(photo => favorites.has(photo.id))
 
     try {
-      console.log(`Starting cover photo update for collection: ${collection.slug}, photo: ${photoId}`)
-      
-      const token = localStorage.getItem('auth-token')
-      if (!token) {
-        console.error('No auth token found')
-        throw new Error('No authentication token found')
-      }
-
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      }
-
-      const response = await fetch(`/api/collections/${collection.slug}/cover`, {
-        method: 'PUT',
-        headers,
-        credentials: 'include',
-        body: JSON.stringify({ photoId })
-      })
-
-      const responseText = await response.text()
-      let data
-      try {
-        data = JSON.parse(responseText)
-      } catch (parseError) {
-        console.error('Failed to parse JSON response:', parseError)
-        throw new Error(`Server returned invalid JSON. Status: ${response.status}`)
-      }
-
-      if (!response.ok) {
-        console.error('API returned error:', data)
-        throw new Error(data.error || `Server error: ${response.status}`)
-      }
-
-      if (data.success && data.coverPhoto) {
-        setCollection(prev => prev ? {
-          ...prev,
-          coverPhoto: data.coverPhoto
-        } : prev)
-        
-        console.log('Cover photo updated successfully')
-      }
-
-    } catch (error) {
-      console.error('Error updating cover photo:', error)
-      alert(`Failed to set cover photo: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    }
-  }
-
-  const handleDeletePhoto = async (photoId: string) => {
-    if (!collection) {
-      console.error('No collection available')
-      return
-    }
-
-    try {
-      console.log(`Deleting photo: ${photoId} from collection: ${collection.slug}`)
-      
-      const token = localStorage.getItem('auth-token')
-      if (!token) {
-        console.error('No auth token found')
-        throw new Error('No authentication token found')
-      }
-
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      }
-
-      const response = await fetch(`/api/collections/${collection.slug}/photos/${photoId}`, {
-        method: 'DELETE',
-        headers,
-        credentials: 'include'
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Failed to parse error response' }))
-        throw new Error(errorData.error || `Server error: ${response.status}`)
-      }
-
-      const data = await response.json()
-
-      if (data.success) {
-        // Remove photo from local state
-        setPhotos(prev => prev.filter(p => p.id !== photoId))
-        
-        // If deleted photo was cover photo, clear cover photo
-        if (collection.coverPhoto?.id === photoId) {
-          setCollection(prev => prev ? {
-            ...prev,
-            coverPhoto: undefined
-          } : prev)
+      if (favoritePhotos.length >= 10) {
+        await handleDownloadAsZip(Array.from(favorites))
+      } else {
+        for (let i = 0; i < favoritePhotos.length; i++) {
+          const photo = favoritePhotos[i]
+          await handleDownload(photo, downloadFormat)
+          
+          if (i < favoritePhotos.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 300))
+          }
         }
-        
-        console.log('Photo deleted successfully')
       }
-
     } catch (error) {
-      console.error('Error deleting photo:', error)
-      alert(`Failed to delete photo: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      console.error('Error downloading favorites:', error)
+      alert('Some downloads may have failed. Please try again.')
+    } finally {
+      setDownloadingFavorites(false)
     }
   }
 
-  const handleDeleteCollection = async () => {
-    if (!collection) return
+  const handleDownloadSelected = async () => {
+    if (selectedPhotos.size === 0) return
 
-    if (!confirm(`Are you sure you want to delete "${collection.title}"? This action cannot be undone and will delete all photos in this collection.`)) {
+    setDownloadingFavorites(true)
+    const selectedPhotosList = photos.filter(photo => selectedPhotos.has(photo.id))
+
+    try {
+      if (selectedPhotosList.length >= 10) {
+        await handleDownloadAsZip(Array.from(selectedPhotos))
+      } else {
+        for (let i = 0; i < selectedPhotosList.length; i++) {
+          const photo = selectedPhotosList[i]
+          await handleDownload(photo, downloadFormat)
+          
+          if (i < selectedPhotosList.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 300))
+          }
+        }
+      }
+      clearSelection()
+    } catch (error) {
+      console.error('Error downloading selected:', error)
+      alert('Some downloads may have failed. Please try again.')
+    } finally {
+      setDownloadingFavorites(false)
+    }
+  }
+
+  const handleDownloadAll = async () => {
+    if (photos.length === 0) return
+    
+    const message = downloadFormat === 'original' 
+      ? `Download all ${photos.length} photos in original quality as ZIP? This may take a while.`
+      : `Download all ${photos.length} photos in 1080p quality as ZIP? This will be faster.`
+    
+    if (!confirm(message)) {
       return
     }
 
-    try {
-      const response = await fetch(`/api/collections/${collection.slug}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders(),
-        credentials: 'include'
+    await handleDownloadAsZip()
+  }
+
+  const handleShare = () => {
+    if (navigator.share) {
+      navigator.share({
+        title: collection?.title,
+        text: `Check out this photo collection: ${collection?.title}`,
+        url: window.location.href
+      }).catch(console.error)
+    } else {
+      navigator.clipboard.writeText(window.location.href).then(() => {
+        alert('Collection link copied to clipboard!')
+      }).catch(() => {
+        alert('Unable to copy link. Please copy the URL manually.')
       })
-
-      if (!response.ok) {
-        throw new Error('Failed to delete collection')
-      }
-
-      console.log('Collection deleted successfully')
-      router.push('/collections?refresh=true')
-
-    } catch (error) {
-      console.error('Error deleting collection:', error)
-      alert('Failed to delete collection. Please try again.')
     }
+  }
+
+  const scrollToGallery = () => {
+    const gallerySection = document.getElementById('gallery-section')
+    if (gallerySection) {
+      gallerySection.scrollIntoView({ behavior: 'smooth' })
+    }
+  }
+
+  const scrollToCover = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" />
-          <span>Loading collection...</span>
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading collection...</p>
         </div>
       </div>
     )
   }
 
-  if (error) {
+  if (error || !collection) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold mb-2">Error</h2>
-          <p className="text-muted-foreground mb-4">{error}</p>
-          <div className="flex gap-2 justify-center">
-            <Button onClick={fetchCollection}>Retry</Button>
-            <Button variant="outline" onClick={() => router.push('/collections')}>
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="text-center max-w-md mx-4">
+          <div className="text-red-500 mb-4">
+            <Camera className="h-16 w-16 mx-auto opacity-50" />
+          </div>
+          <h2 className="text-xl font-semibold mb-2">Collection Not Available</h2>
+          <p className="text-gray-600 mb-4">
+            {error || 'This collection could not be loaded.'}
+          </p>
+          <Link href="/">
+            <Button>
+              <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Collections
             </Button>
-          </div>
+          </Link>
         </div>
       </div>
     )
   }
 
-  if (!collection) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold mb-2">Collection Not Found</h2>
-          <p className="text-muted-foreground mb-4">The collection you're looking for doesn't exist.</p>
-          <Button onClick={() => router.push('/collections')}>
-            Back to Collections
-          </Button>
-        </div>
-      </div>
-    )
+  const design = collection.design || {
+    coverLayout: 'center',
+    typography: {
+      titleFont: 'Inter',
+      titleSize: 48,
+      titleColor: '#ffffff'
+    },
+    colors: {
+      background: '#ffffff',
+      accent: '#000000'
+    },
+    grid: {
+      columns: 4,
+      spacing: 8
+    },
+    coverFocus: {
+      x: 50,
+      y: 50
+    }
   }
 
-  const design = getDesignSettings()
-  const allSelected = photos.length > 0 && selectedPhotos.size === photos.length
+  const favoritePhotos = photos.filter(photo => favorites.has(photo.id))
 
   return (
-    <AppLayout>
-      <div className="flex flex-col h-full">
-        {/* Header */}
-        <div className="border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="flex items-center justify-between p-6">
-            <div className="flex items-center gap-4">
-              <Link href="/collections">
-                <Button variant="ghost" size="sm">
-                  <ArrowLeft className="h-4 w-4" />
-                </Button>
-              </Link>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 
-                    className="text-2xl font-semibold text-foreground"
-                    style={{ 
-                      fontFamily: design.typography.titleFont,
-                      color: design.colors.accent 
-                    }}
-                  >
-                    {collection.title}
-                  </h1>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
-                    ACTIVE
-                  </span>
-                  {collection.isStarred && (
-                    <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                  )}
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  {collection.description} • {new Date(collection.createdAt).toLocaleDateString()}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4">
-              <Link href={`/collections/${collection.slug}/design`}>
-                <Button variant="outline" size="sm">
-                  <Settings className="h-4 w-4 mr-2" />
-                  Design
-                </Button>
-              </Link>
-              <Link href={`/collections/${collection.slug}/preview`}>
-                <Button variant="outline" size="sm">
-                  <Eye className="h-4 w-4 mr-2" />
-                  Preview
-                </Button>
-              </Link>
-              <Button
-                size="sm"
-                className="gap-2"
-                onClick={() => setShowShareDialog(true)}
-              >
-                <Share2 className="h-4 w-4" />
-                Share
-              </Button>
-            </div>
+    <div className="min-h-screen">
+      <section 
+        className="min-h-screen flex items-center justify-center relative overflow-hidden"
+        style={{ backgroundColor: design.colors.background }}
+      >
+        {collection.coverPhoto ? (
+          <img
+            src={collection.coverPhoto.webUrl}
+            alt="Cover"
+            className="absolute inset-0 w-full h-full object-cover"
+            style={{
+              objectPosition: `${design.coverFocus.x}% ${design.coverFocus.y}%`
+            }}
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center text-gray-500">
+            <Camera className="h-24 w-24 opacity-20" />
           </div>
+        )}
+
+        <div className="absolute inset-0 bg-black/40"></div>
+
+        <div className="absolute top-6 left-6 z-20">
+          <Link href="/">
+            <Button size="sm" variant="outline" className="bg-white/20 backdrop-blur border-white/30 text-white hover:bg-white/30">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back
+            </Button>
+          </Link>
         </div>
 
-        {/* Selection Mode Banner */}
-        {selectionMode && (
-          <div className="bg-blue-50 border-b border-blue-200 px-6 py-3">
+        <div className="absolute top-6 right-6 z-20">
+          <Button onClick={handleShare} size="sm" variant="outline" className="bg-white/20 backdrop-blur border-white/30 text-white hover:bg-white/30">
+            <Share2 className="h-4 w-4 mr-2" />
+            Share
+          </Button>
+        </div>
+
+        <div className="relative z-10 text-center">
+          <h1
+            className="font-bold tracking-wide mb-8"
+            style={{
+              fontFamily: design.typography.titleFont,
+              fontSize: `${design.typography.titleSize}px`,
+              color: design.typography.titleColor
+            }}
+          >
+            {collection.title.toUpperCase()}
+          </h1>
+
+          <div className="mb-12">
+            <p className="text-white/80 text-sm tracking-wider">
+              RENE RIVAROLA PHOTOGRAPHY
+            </p>
+          </div>
+
+          <Button
+            onClick={scrollToGallery}
+            size="lg"
+            variant="ghost"
+            className="bg-white/10 backdrop-blur border border-white/20 text-white hover:bg-white/20 px-8 py-3 text-lg animate-bounce"
+          >
+            <ChevronDown className="h-6 w-6 mr-2" />
+            View Photos
+          </Button>
+        </div>
+
+        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 text-white/60">
+          <div className="flex flex-col items-center">
+            <p className="text-xs mb-2">SCROLL DOWN</p>
+            <ChevronDown className="h-4 w-4 animate-bounce" />
+          </div>
+        </div>
+      </section>
+
+      <section id="gallery-section" className="min-h-screen" style={{ backgroundColor: design.colors.background }}>
+        <div className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-gray-200">
+          <div className="w-full px-6 py-4">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <CheckSquare className="h-5 w-5 text-blue-600" />
-                  <span className="font-medium text-blue-900">
-                    {selectedPhotos.size} of {photos.length} selected
-                  </span>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={allSelected ? deselectAllPhotos : selectAllPhotos}
-                    className="text-blue-700 border-blue-300 hover:bg-blue-100"
-                  >
-                    {allSelected ? 'Deselect All' : 'Select All'}
-                  </Button>
-                </div>
+              <div>
+                <h2 className="text-2xl font-bold" style={{ fontFamily: design.typography.titleFont, color: design.colors.accent }}>
+                  {collection.title.toUpperCase()}
+                </h2>
+                <p className="text-sm text-gray-600 mt-1">RENE RIVAROLA PHOTOGRAPHY</p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 {selectedPhotos.size > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="default"
+                      onClick={handleDownloadSelected}
+                      size="sm"
+                      disabled={downloadingFavorites}
+                    >
+                      <DownloadIcon className="h-4 w-4 mr-2" />
+                      Download Selected ({selectedPhotos.size})
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={clearSelection}
+                      size="sm"
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                )}
+
+                {favorites.size > 0 && (
                   <Button
-                    variant="destructive"
+                    variant={showFavorites ? "default" : "outline"}
+                    onClick={() => setShowFavorites(!showFavorites)}
                     size="sm"
-                    onClick={handleBulkDelete}
-                    disabled={bulkDeleteLoading}
-                    className="gap-2"
                   >
-                    {bulkDeleteLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-4 w-4" />
-                    )}
-                    Delete Selected ({selectedPhotos.size})
+                    <Heart className={`h-4 w-4 mr-2 ${favorites.size > 0 ? 'fill-current' : ''}`} />
+                    Favorites ({favorites.size})
                   </Button>
                 )}
                 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={toggleSelectionMode}
-                  className="text-blue-700 border-blue-300 hover:bg-blue-100"
-                >
-                  Cancel
+                <div className="relative">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setShowDownloadMenu(!showDownloadMenu)}
+                  >
+                    <DownloadIcon className="h-4 w-4 mr-2" />
+                    Download
+                    <ChevronDown className="h-3 w-3 ml-2" />
+                  </Button>
+                  
+                  {showDownloadMenu && (
+                    <>
+                      <div 
+                        className="fixed inset-0 z-40" 
+                        onClick={() => setShowDownloadMenu(false)}
+                      />
+                      <div className="absolute right-0 mt-2 w-72 bg-white border border-gray-200 rounded-lg shadow-xl z-50">
+                        <div className="p-4">
+                          <div className="mb-4">
+                            <p className="text-xs font-medium text-gray-700 mb-2">Download Quality</p>
+                            <div className="grid grid-cols-2 gap-2">
+                              <button
+                                onClick={() => setDownloadFormat('web')}
+                                className={`px-3 py-2 text-sm rounded-md border transition-all ${
+                                  downloadFormat === 'web'
+                                    ? 'bg-blue-50 border-blue-500 text-blue-700 font-medium'
+                                    : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'
+                                }`}
+                              >
+                                <div className="font-medium">1080p</div>
+                                <div className="text-xs opacity-75">Faster</div>
+                              </button>
+                              <button
+                                onClick={() => setDownloadFormat('original')}
+                                className={`px-3 py-2 text-sm rounded-md border transition-all ${
+                                  downloadFormat === 'original'
+                                    ? 'bg-blue-50 border-blue-500 text-blue-700 font-medium'
+                                    : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'
+                                }`}
+                              >
+                                <div className="font-medium">Original</div>
+                                <div className="text-xs opacity-75">Full Quality</div>
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="border-t border-gray-100 my-3"></div>
+
+                          <div className="space-y-1">
+                            {selectedPhotos.size > 0 && (
+                              <button
+                                onClick={() => {
+                                  setShowDownloadMenu(false)
+                                  handleDownloadSelected()
+                                }}
+                                disabled={downloadingFavorites}
+                                className="w-full text-left px-3 py-2.5 text-sm hover:bg-gray-50 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <Check className="h-4 w-4 text-blue-500" />
+                                    <span className="font-medium">Download Selected</span>
+                                  </div>
+                                  <span className="text-xs text-gray-500">
+                                    {selectedPhotos.size} {selectedPhotos.size >= 10 ? 'as ZIP' : 'photos'}
+                                  </span>
+                                </div>
+                                {selectedPhotos.size >= 10 && (
+                                  <p className="text-xs text-gray-500 mt-1 ml-6">
+                                    Will be packaged as ZIP file
+                                  </p>
+                                )}
+                                {selectedPhotos.size < 10 && (
+                                  <p className="text-xs text-gray-500 mt-1 ml-6">
+                                    Individual downloads
+                                  </p>
+                                )}
+                              </button>
+                            )}
+
+                            {favorites.size > 0 && (
+                              <button
+                                onClick={() => {
+                                  setShowDownloadMenu(false)
+                                  handleDownloadFavorites()
+                                }}
+                                disabled={downloadingFavorites}
+                                className="w-full text-left px-3 py-2.5 text-sm hover:bg-gray-50 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <Heart className="h-4 w-4 text-red-500 fill-current" />
+                                    <span className="font-medium">Download Favorites</span>
+                                  </div>
+                                  <span className="text-xs text-gray-500">
+                                    {favorites.size} {favorites.size >= 10 ? 'as ZIP' : 'photos'}
+                                  </span>
+                                </div>
+                                {favorites.size >= 10 && (
+                                  <p className="text-xs text-gray-500 mt-1 ml-6">
+                                    Will be packaged as ZIP file
+                                  </p>
+                                )}
+                                {favorites.size < 10 && (
+                                  <p className="text-xs text-gray-500 mt-1 ml-6">
+                                    Individual downloads
+                                  </p>
+                                )}
+                              </button>
+                            )}
+                            
+                            <button
+                              onClick={() => {
+                                setShowDownloadMenu(false)
+                                handleDownloadAll()
+                              }}
+                              disabled={downloadingFavorites}
+                              className="w-full text-left px-3 py-2.5 text-sm hover:bg-gray-50 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <DownloadIcon className="h-4 w-4 text-blue-500" />
+                                  <span className="font-medium">Download All</span>
+                                </div>
+                                <span className="text-xs text-gray-500">{photos.length} photos</span>
+                              </div>
+                              <p className="text-xs text-gray-500 mt-1 ml-6">
+                                Complete collection as ZIP
+                              </p>
+                            </button>
+                          </div>
+
+                          {downloadingFavorites && (
+                            <div className="mt-3 pt-3 border-t border-gray-100">
+                              <div className="flex items-center gap-2 text-sm text-blue-600">
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                                <span>Preparing download...</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <Button variant="outline" onClick={handleShare} size="sm">
+                  <Share2 className="h-4 w-4 mr-2" />
+                  Share
                 </Button>
+                <Button variant="outline" onClick={scrollToCover} size="sm">
+                  Back to Top
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {showFavorites && favorites.size > 0 && (
+          <div className="bg-yellow-50 border-b border-yellow-200">
+            <div className="w-full px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-medium text-yellow-800">{favorites.size} Favorite Photo{favorites.size !== 1 ? 's' : ''}</h3>
+                  <p className="text-sm text-yellow-700">These are your favorite photos from this collection</p>
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={handleDownloadFavorites} disabled={downloadingFavorites} size="sm">
+                    <DownloadIcon className="h-4 w-4 mr-2" />
+                    {downloadingFavorites ? 'Downloading...' : 'Download Favorites'}
+                  </Button>
+                  <Button onClick={handleClearFavorites} variant="outline" size="sm">Clear Favorites</Button>
+                </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* Compact Collection Header with Side Cover */}
-        <div 
-          className="border-b border-border p-6"
-          style={{ backgroundColor: design.colors.background }}
-        >
-          <div className="flex gap-6 items-start">
-            {/* Cover Photo - Left Side */}
-            <div className="flex-shrink-0">
-              <div 
-                className="relative w-64 h-40 rounded-lg overflow-hidden group cursor-pointer border-2 transition-all duration-300 hover:shadow-lg"
-                style={{ borderColor: design.colors.accent + '20' }}
-                onClick={() => setShowCoverSelector(true)}
-              >
-                {collection.coverPhoto ? (
-                  <>
-                    <img
-                      src={collection.coverPhoto.webUrl}
-                      alt={`${collection.title} cover`}
-                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                      style={{
-                        objectPosition: `${design.coverFocus.x}% ${design.coverFocus.y}%`
-                      }}
-                    />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all duration-300" />
-                    
-                    {/* Cover indicator */}
-                    <div className="absolute top-2 right-2">
-                      <Badge 
-                        variant="secondary" 
-                        className="text-xs bg-white/90 text-gray-700 shadow-sm"
-                      >
-                        Cover
-                      </Badge>
-                    </div>
-
-                    {/* Hover overlay */}
-                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        className="gap-2 bg-white/90 text-black hover:bg-white shadow-lg"
-                      >
-                        <Camera className="h-4 w-4" />
-                        Change
-                      </Button>
-                    </div>
-                  </>
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-muted hover:bg-muted/80 transition-colors">
-                    <div className="text-center text-muted-foreground">
-                      <Camera className="h-8 w-8 mx-auto mb-2" />
-                      <p className="text-sm font-medium">No Cover</p>
-                      <p className="text-xs">Click to set</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Cover photo info */}
-              <div className="mt-2 text-center">
-                <p className="text-xs text-muted-foreground">
-                  Cover Photo Preview
-                </p>
-              </div>
-            </div>
-
-            {/* Collection Info - Right Side */}
-            <div className="flex-1 min-w-0">
-              <div className="mb-4">
-                <h2 
-                  className="text-2xl font-bold mb-2 truncate"
-                  style={{ 
-                    fontFamily: design.typography.titleFont,
-                    color: design.colors.accent 
-                  }}
-                >
-                  {collection.title}
-                </h2>
-                
-                <div className="flex items-center gap-3 mb-3">
-                  <Badge 
-                    variant="outline" 
-                    className="text-green-600 border-green-200 bg-green-50"
-                  >
-                    {photos.length} Photos
-                  </Badge>
-                  
-                  {photos.filter(p => p.isRaw).length > 0 && (
-                    <Badge variant="outline" className="text-blue-600 border-blue-200 bg-blue-50">
-                      {photos.filter(p => p.isRaw).length} RAW
-                    </Badge>
-                  )}
-                  
-                  <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50">
-                    ACTIVE
-                  </Badge>
-
-                  {collection.isStarred && (
-                    <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                  )}
+        {selectedPhotos.size > 0 && (
+          <div className="bg-blue-50 border-b border-blue-200">
+            <div className="w-full px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-medium text-blue-800">{selectedPhotos.size} Photo{selectedPhotos.size !== 1 ? 's' : ''} Selected for Download</h3>
+                  <p className="text-sm text-blue-700">Ready to download your selection</p>
                 </div>
-
-                {collection.description && (
-                  <p 
-                    className="text-muted-foreground mb-3 line-clamp-2"
-                    style={{ fontFamily: design.typography.titleFont }}
-                  >
-                    {collection.description}
-                  </p>
-                )}
-
-                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
-                  <Clock className="h-4 w-4" />
-                  <span>Created {new Date(collection.createdAt).toLocaleDateString()}</span>
-                  {collection.updatedAt !== collection.createdAt && (
-                    <>
-                      <span>•</span>
-                      <span>Updated {new Date(collection.updatedAt).toLocaleDateString()}</span>
-                    </>
-                  )}
+                <div className="flex gap-2">
+                  <Button onClick={selectAll} variant="outline" size="sm">
+                    Select All ({photos.length})
+                  </Button>
+                  <Button onClick={clearSelection} variant="outline" size="sm">
+                    Clear Selection
+                  </Button>
                 </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex flex-wrap gap-3">
-                <Link href={`/upload?collection=${collection.id}`}>
-                  <Button variant="default" size="sm" className="gap-2">
-                    <Plus className="h-4 w-4" />
-                    Add Photos
-                  </Button>
-                </Link>
-
-                {photos.length > 0 && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    onClick={toggleSelectionMode}
-                  >
-                    {selectionMode ? (
-                      <Square className="h-4 w-4" />
-                    ) : (
-                      <CheckSquare className="h-4 w-4" />
-                    )}
-                    {selectionMode ? 'Cancel Select' : 'Select Photos'}
-                  </Button>
-                )}
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-2"
-                  onClick={() => setShowCoverSelector(true)}
-                >
-                  <Camera className="h-4 w-4" />
-                  Change Cover
-                </Button>
-
-                {photos.length > 0 && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    onClick={() => {
-                      // Bulk download logic here
-                      alert('Bulk download coming soon!')
-                    }}
-                  >
-                    <Download className="h-4 w-4" />
-                    Download All
-                  </Button>
-                )}
-
-                
               </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Photo Content */}
-        <div 
-          className="flex-1 overflow-auto p-6"
-          style={{ backgroundColor: design.colors.background }}
-        >
-          {photos.length === 0 ? (
-            <div className="flex items-center justify-center h-64">
-              <div className="text-center">
-                <div className="w-16 h-16 mx-auto mb-4 bg-muted rounded-full flex items-center justify-center">
-                  <Camera className="h-8 w-8 text-muted-foreground" />
-                </div>
-                <h3 className="text-lg font-medium mb-2">No photos yet</h3>
-                <p className="text-muted-foreground mb-4">
-                  This collection is empty. Upload some photos to get started.
-                </p>
-                <Link href={`/upload?collection=${collection.id}`}>
-                  <Button className="gap-2">
-                    <Plus className="h-4 w-4" />
-                    Add Photos
-                  </Button>
-                </Link>
-              </div>
-            </div>
-          ) : (
-            <>
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <h3 
-                    className="text-lg font-medium"
-                    style={{ 
-                      fontFamily: design.typography.titleFont,
-                      color: design.colors.accent 
-                    }}
-                  >
-                    Photos ({photos.length})
-                  </h3>
-                  <Badge variant="secondary" className="ml-2">
-                    {photos.filter(p => p.isRaw).length} RAW
-                  </Badge>
-                </div>
-              </div>
-
-              {/* Photo Grid with Design Settings Applied */}
-              <div 
-                className="grid"
-                style={{
-                  gridTemplateColumns: `repeat(${design.grid.columns}, 1fr)`,
-                  gap: `${design.grid.spacing}px`
-                }}
-              >
-                {photos.map((photo, index) => (
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
+          {photos.length > 0 ? (
+            <div className="grid w-full" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(300px, 1fr))`, gap: `${design.grid.spacing}px` }}>
+              {(showFavorites ? favoritePhotos : photos).map((photo, index) => {
+                const isFavorite = favorites.has(photo.id)
+                const isSelected = selectedPhotos.has(photo.id)
+                const actualIndex = showFavorites ? photos.findIndex(p => p.id === photo.id) : index
+                return (
                   <div
                     key={photo.id}
-                    className="relative group cursor-pointer rounded-lg overflow-hidden bg-muted aspect-square hover:shadow-lg transition-all duration-300 hover:scale-[1.02]"
-                    onClick={() => handlePhotoClick(photo)}
+                    className={`aspect-square bg-gray-100 rounded-lg overflow-hidden hover:shadow-lg transition-all duration-300 cursor-pointer group relative ${
+                      isSelected ? 'ring-4 ring-blue-500' : isFavorite ? 'ring-2 ring-red-400 ring-opacity-60' : ''
+                    }`}
+                    onClick={() => handlePhotoClick(photo, actualIndex)}
                   >
-                    {/* Selection checkbox */}
-                    {selectionMode && (
-                      <div className="absolute top-2 left-2 z-20">
-                        <div 
-                          className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-all ${
-                            selectedPhotos.has(photo.id)
-                              ? 'bg-blue-600 border-blue-600 text-white'
-                              : 'bg-white/90 border-white/60 text-gray-600'
-                          }`}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            togglePhotoSelection(photo.id)
-                          }}
-                        >
-                          {selectedPhotos.has(photo.id) && (
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    <img
-                      src={photo.thumbnailUrl}
-                      alt={photo.filename}
-                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                      loading="lazy"
-                    />
-
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all duration-300" />
-
-                    {/* Top Actions Row (only show when not in selection mode) */}
-                    {!selectionMode && (
-                      <div className="absolute top-2 left-2 right-2 flex items-start justify-between opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                        {/* Cover Photo Star */}
-                        <Button
-                          size="sm"
-                          variant={collection.coverPhoto?.id === photo.id ? "default" : "outline"}
-                          className={`h-8 w-8 p-0 shadow-lg ${
-                            collection.coverPhoto?.id === photo.id
-                              ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
-                              : 'bg-white/90 hover:bg-white text-gray-700'
-                          }`}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleSetCover(photo.id)
-                          }}
-                        >
-                          <Star className={`h-4 w-4 ${
-                            collection.coverPhoto?.id === photo.id ? 'fill-current' : ''
-                          }`} />
-                        </Button>
-
-                        {/* Delete Button */}
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          className="h-8 w-8 p-0 shadow-lg bg-red-500 hover:bg-red-600 text-white"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            if (confirm(`Are you sure you want to delete "${photo.originalFilename}"? This action cannot be undone.`)) {
-                              handleDeletePhoto(photo.id)
-                            }
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    )}
-
-                    {/* Photo Info */}
-                    <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300">
-                      <div 
-                        className="text-white text-xs font-medium truncate"
-                        style={{ fontFamily: design.typography.titleFont }}
+                    <img src={photo.webUrl} alt={photo.originalFilename} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    
+                    {/* Selection Checkbox - Top Right (always visible when selected) */}
+                    <div 
+                      className={`absolute top-3 right-3 z-10 transition-opacity duration-200 ${
+                        isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                      }`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        onClick={() => toggleSelection(photo.id)}
+                        className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-all shadow-lg ${
+                          isSelected
+                            ? 'bg-blue-500 border-blue-500'
+                            : 'bg-white/90 border-white backdrop-blur hover:bg-white hover:scale-110'
+                        }`}
                       >
-                        {photo.originalFilename}
-                      </div>
+                        {isSelected && <Check className="h-3.5 w-3.5 text-white" />}
+                      </button>
                     </div>
 
-                    {/* Selection overlay */}
-                    {selectionMode && selectedPhotos.has(photo.id) && (
-                      <div className="absolute inset-0 bg-blue-600/20 border-2 border-blue-600 rounded-lg" />
+                    {/* Favorite Heart - Top Left (always visible when favorited) */}
+                    {isFavorite && (
+                      <div className="absolute top-3 left-3 z-10">
+                        <Heart className="h-5 w-5 fill-red-500 text-red-500 drop-shadow-lg" />
+                      </div>
                     )}
+
+                    {/* Action Buttons - Bottom Right (only on hover) */}
+                    <div className="absolute bottom-3 right-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex gap-1.5">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className={`h-8 w-8 p-0 backdrop-blur-md border-white/40 shadow-lg transition-all hover:scale-110 ${
+                          isFavorite 
+                            ? 'bg-red-500/90 text-white hover:bg-red-600/90 border-red-400' 
+                            : 'bg-white/90 text-gray-700 hover:bg-white'
+                        }`}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          toggleFavorite(photo.id)
+                        }}
+                        title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                      >
+                        <Heart className={`h-3.5 w-3.5 ${isFavorite ? 'fill-current' : ''}`} />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 w-8 p-0 bg-white/90 backdrop-blur-md border-white/40 text-gray-700 hover:bg-white shadow-lg transition-all hover:scale-110"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDownload(photo, downloadFormat)
+                        }}
+                        title="Download this photo"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+
+                    {/* Overlay gradient on hover */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
                   </div>
-                ))}
-              </div>
-            </>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-16">
+              <Camera className="h-16 w-16 mx-auto mb-4 opacity-50 text-gray-500" />
+              <p className="text-lg text-gray-500">No photos in this collection</p>
+            </div>
+          )}
+
+          {showFavorites && favoritePhotos.length === 0 && (
+            <div className="text-center py-16">
+              <Heart className="h-16 w-16 mx-auto mb-4 opacity-50 text-gray-500" />
+              <p className="text-lg text-gray-500">No favorites selected yet</p>
+              <p className="text-sm mt-2 text-gray-400">Click the heart icon on photos to add them to favorites</p>
+            </div>
           )}
         </div>
-      </div>
 
-      {/* Share Dialog */}
-      <ShareCollectionDialog
-        open={showShareDialog}
-        onOpenChange={setShowShareDialog}
-        collection={{
-          id: collection.id,
-          title: collection.title,
-          slug: collection.slug,
-          photoCount: collection._count.photos,
-        }}
-      />
+        <div className="border-t border-gray-200 bg-gray-50 py-8 mt-16">
+          <div className="w-full px-6 text-center">
+            <p className="text-sm text-gray-600">© {new Date().getFullYear()} RENE RIVAROLA PHOTOGRAPHY</p>
+          </div>
+        </div>
+      </section>
 
-      {/* Photo Gallery */}
-      {showGallery && selectedPhoto && (
-        <PhotoGallery
-          photos={photos}
-          currentIndex={currentPhotoIndex}
-          isOpen={showGallery}
-          onClose={() => setShowGallery(false)}
-          onNavigate={(index) => {
-            setCurrentPhotoIndex(index)
-            setSelectedPhoto(photos[index])
-          }}
-          onDownload={async (photo) => {
-            try {
-              const response = await fetch(photo.originalUrl)
-              const blob = await response.blob()
-              const link = document.createElement('a')
-              link.href = URL.createObjectURL(blob)
-              link.download = photo.originalFilename
-              document.body.appendChild(link)
-              link.click()
-              document.body.removeChild(link)
-              URL.revokeObjectURL(link.href)
-            } catch (error) {
-              console.error('Download failed:', error)
-              alert('Failed to download photo')
-            }
-          }}
-          onFavorite={(photo) => {
-            console.log('Favorite photo:', photo.id)
-            alert('Favorites feature coming soon!')
-          }}
-          onShare={(photo) => {
-            if (navigator.share) {
-              navigator.share({
-                title: `Photo: ${photo.originalFilename}`,
-                url: window.location.href
-              }).catch(console.error)
-            } else {
-              navigator.clipboard.writeText(window.location.href).then(() => {
-                alert('Link copied to clipboard!')
-              })
-            }
-          }}
-          onProcessRaw={(photo) => {
-            setSelectedPhoto(photo)
-            setShowRawProcessor(true)
-            setShowGallery(false)
-          }}
-        />
+      {selectedPhoto && (
+        <div className="fixed inset-0 bg-black/95 z-50 flex flex-col" onClick={handleCloseLightbox}>
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 bg-black/80 backdrop-blur-sm shrink-0">
+            <div className="flex items-center gap-4">
+              <Button variant="ghost" size="sm" onClick={handleCloseLightbox} className="text-white hover:text-white hover:bg-white/20">
+                <X className="h-4 w-4" />
+              </Button>
+              <div className="text-white">
+                <h3 className="font-medium">{selectedPhoto.originalFilename}</h3>
+                <p className="text-sm text-white/70">{currentPhotoIndex + 1} of {photos.length}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setZoom(prev => Math.max(prev / 1.2, 0.1)); }} className="text-white hover:text-white hover:bg-white/20">
+                <ZoomOut className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setZoom(prev => Math.min(prev * 1.2, 5)); }} className="text-white hover:text-white hover:bg-white/20">
+                <ZoomIn className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setRotation(prev => (prev + 90) % 360); }} className="text-white hover:text-white hover:bg-white/20">
+                <RotateCw className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setZoom(1); setRotation(0); }} className="text-white hover:text-white hover:bg-white/20">
+                <Maximize2 className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); toggleFavorite(selectedPhoto.id); }} className={`text-white hover:text-white hover:bg-white/20 ${favorites.has(selectedPhoto.id) ? 'bg-red-500/80' : ''}`}>
+                <Heart className={`h-4 w-4 ${favorites.has(selectedPhoto.id) ? 'fill-current' : ''}`} />
+              </Button>
+              <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); toggleSelection(selectedPhoto.id); }} className={`text-white hover:text-white hover:bg-white/20 ${selectedPhotos.has(selectedPhoto.id) ? 'bg-blue-500/80' : ''}`}>
+                {selectedPhotos.has(selectedPhoto.id) ? <Check className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleDownload(selectedPhoto, downloadFormat); }} className="text-white hover:text-white hover:bg-white/20">
+                <Download className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Main Image Area */}
+          <div className="flex-1 flex items-center justify-center relative overflow-hidden" style={{ minHeight: 0 }} onClick={(e) => e.stopPropagation()}>
+            {/* Navigation Buttons */}
+            {currentPhotoIndex > 0 && (
+              <Button variant="ghost" size="lg" onClick={(e) => { e.stopPropagation(); navigatePhoto(-1); }} className="absolute left-4 z-10 text-white hover:text-white hover:bg-white/20">
+                <ChevronLeft className="h-8 w-8" />
+              </Button>
+            )}
+            {currentPhotoIndex < photos.length - 1 && (
+              <Button variant="ghost" size="lg" onClick={(e) => { e.stopPropagation(); navigatePhoto(1); }} className="absolute right-4 z-10 text-white hover:text-white hover:bg-white/20">
+                <ChevronRight className="h-8 w-8" />
+              </Button>
+            )}
+
+            {/* Image */}
+            <div className="w-full h-full flex items-center justify-center p-4">
+              <img 
+                src={selectedPhoto.webUrl} 
+                alt={selectedPhoto.originalFilename} 
+                className="max-w-full max-h-full object-contain transition-transform duration-200" 
+                style={{ 
+                  transform: `scale(${zoom}) rotate(${rotation}deg)`,
+                  transformOrigin: 'center'
+                }} 
+              />
+            </div>
+          </div>
+
+          {/* Thumbnail Strip */}
+          <div className="shrink-0 bg-black/80 backdrop-blur-sm border-t border-white/10" onClick={(e) => e.stopPropagation()}>
+            <div className="overflow-x-auto overflow-y-hidden">
+              <div className="flex gap-2 p-4 min-w-max">
+                {photos.map((photo, index) => {
+                  const isActive = photo.id === selectedPhoto.id
+                  const isFav = favorites.has(photo.id)
+                  const isSel = selectedPhotos.has(photo.id)
+                  return (
+                    <button
+                      key={photo.id}
+                      onClick={() => handlePhotoClick(photo, index)}
+                      className={`relative shrink-0 w-20 h-20 rounded-lg overflow-hidden transition-all ${
+                        isActive 
+                          ? 'ring-2 ring-white scale-110' 
+                          : 'opacity-60 hover:opacity-100 hover:scale-105'
+                      }`}
+                    >
+                      <img
+                        src={photo.thumbnailUrl}
+                        alt={photo.originalFilename}
+                        className="w-full h-full object-cover"
+                      />
+                      {/* Badges */}
+                      <div className="absolute top-1 left-1 flex gap-1">
+                        {isFav && (
+                          <div className="w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
+                            <Heart className="h-2.5 w-2.5 fill-white text-white" />
+                          </div>
+                        )}
+                        {isSel && (
+                          <div className="w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center">
+                            <Check className="h-2.5 w-2.5 text-white" />
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Keyboard Shortcuts Info */}
+          <div className="absolute bottom-32 left-4 text-white/50 text-xs pointer-events-none">
+            <p>← → Navigate • +/- Zoom • R Rotate • ESC Close</p>
+          </div>
+        </div>
       )}
-
-      {/* Cover Photo Selector */}
-      <CoverPhotoSelector
-        open={showCoverSelector}
-        onOpenChange={setShowCoverSelector}
-        photos={photos}
-        currentCoverPhotoId={collection.coverPhoto?.id}
-        onSelectCover={handleSetCover}
-      />
-    </AppLayout>
+    </div>
   )
 }

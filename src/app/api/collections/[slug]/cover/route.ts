@@ -1,111 +1,182 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { AuthService } from '@/lib/auth'
-import { storage } from '@/lib/storage'
+import { prisma } from '@/lib/prisma'
+import { z } from 'zod'
 
+const SetCoverPhotoSchema = z.object({
+  photoId: z.string().uuid()
+})
+
+// PUT method - alias for POST
 export async function PUT(
+  request: NextRequest,
+  params: { params: Promise<{ slug: string }> }
+) {
+  return POST(request, params)
+}
+
+// POST /api/collections/[slug]/cover - Set cover photo for collection
+export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
 ) {
-  console.log('PUT /api/collections/[slug]/cover endpoint called');
-  
   try {
     const { slug } = await params
-
-    console.log(`Cover photo update request for collection: ${slug}`)
-
-    // Get token from Authorization header or cookies
+    
     const authHeader = request.headers.get('authorization')
     const bearerToken = authHeader?.replace('Bearer ', '')
     const cookieToken = request.cookies.get('auth-token')?.value
     const token = bearerToken || cookieToken
 
-    console.log('Auth header:', authHeader ? 'Present' : 'Missing')
-    console.log('Cookie token:', cookieToken ? 'Present' : 'Missing')
+    console.log(`📸 SET Cover Photo for collection: ${slug}`)
 
     if (!token) {
-      console.log('No token found')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const payload = AuthService.verifyToken(token)
     if (!payload) {
-      console.log('Invalid token')
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
 
-    console.log(`Authenticated user: ${payload.email}`)
+    const body = await request.json()
+    const { photoId } = SetCoverPhotoSchema.parse(body)
 
-    // Get the photo ID from request body
-    const { photoId } = await request.json()
-    console.log(`Requested photo ID: ${photoId}`)
+    // Get collection to verify ownership
+    const collection = await prisma.collection.findUnique({
+      where: { slug },
+      select: { id: true, ownerId: true }
+    })
 
-    if (!photoId) {
-      console.log('No photo ID provided')
-      return NextResponse.json({ error: 'Photo ID required' }, { status: 400 })
-    }
-
-    // Get collections and photos from storage
-    const collectionsMap = await storage.getCollections()
-    const photosMap = await storage.getPhotos()
-
-    console.log(`Total collections in storage: ${collectionsMap.size}`)
-    console.log(`Total photos in storage: ${photosMap.size}`)
-
-    // Find collection by slug
-    const collection = Array.from(collectionsMap.values()).find(c => c.slug === slug)
     if (!collection) {
-      console.log(`Collection not found with slug: ${slug}`)
-      console.log(`Available collections: ${Array.from(collectionsMap.values()).map(c => c.slug).join(', ')}`)
+      console.log(`❌ Collection not found: ${slug}`)
       return NextResponse.json({ error: 'Collection not found' }, { status: 404 })
     }
 
-    console.log(`Found collection: ${collection.title} (ID: ${collection.id})`)
-
-    // Check ownership
     if (collection.ownerId !== payload.userId && payload.role !== 'admin') {
-      console.log(`Access denied. Collection owner: ${collection.ownerId}, User: ${payload.userId}`)
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
-    // Get the photo to set as cover
-    const photo = photosMap.get(photoId)
+    // Verify photo exists and belongs to this collection
+    const photo = await prisma.photo.findUnique({
+      where: { id: photoId },
+      select: {
+        id: true,
+        collectionId: true,
+        thumbnailUrl: true,
+        webUrl: true
+      }
+    })
+
     if (!photo) {
-      console.log(`Photo not found with ID: ${photoId}`)
-      console.log(`Available photo IDs: ${Array.from(photosMap.keys()).join(', ')}`)
+      console.log(`❌ Photo not found: ${photoId}`)
       return NextResponse.json({ error: 'Photo not found' }, { status: 404 })
     }
 
-    console.log(`Found photo: ${photo.filename} (Collection: ${photo.collectionId})`)
-
-    // Verify photo belongs to this collection
     if (photo.collectionId !== collection.id) {
-      console.log(`Photo belongs to collection ${photo.collectionId}, but trying to set for ${collection.id}`)
+      console.log(`❌ Photo does not belong to collection`)
       return NextResponse.json({ error: 'Photo does not belong to this collection' }, { status: 400 })
     }
 
-    // Create cover photo object
-    const coverPhoto = {
-      id: photo.id,
-      thumbnailUrl: photo.thumbnailUrl,
-      webUrl: photo.webUrl
-    }
-
-    console.log(`Updating collection with cover photo:`, coverPhoto)
-
-    // Use the existing updateCollection method instead of saveCollections
-    await storage.updateCollection(collection.id, {
-      coverPhoto: coverPhoto
+    // Update collection with new cover photo
+    const updatedCollection = await prisma.collection.update({
+      where: { id: collection.id },
+      data: {
+        coverPhotoId: photoId,
+        updatedAt: new Date()
+      },
+      include: {
+        coverPhoto: {
+          select: {
+            id: true,
+            thumbnailUrl: true,
+            webUrl: true
+          }
+        }
+      }
     })
 
-    console.log(`Cover photo set successfully for collection: ${collection.title}`)
+    console.log(`✅ Cover photo set successfully`)
 
     return NextResponse.json({
       success: true,
-      coverPhoto: coverPhoto
+      message: 'Cover photo updated successfully',
+      coverPhoto: updatedCollection.coverPhoto
     })
 
   } catch (error) {
-    console.error('Cover photo error:', error)
+    console.error('❌ SET Cover Photo error:', error)
+
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Invalid request data', details: error.issues },
+        { status: 400 }
+      )
+    }
+
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
+// DELETE /api/collections/[slug]/cover - Remove cover photo from collection
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ slug: string }> }
+) {
+  try {
+    const { slug } = await params
+    
+    const authHeader = request.headers.get('authorization')
+    const bearerToken = authHeader?.replace('Bearer ', '')
+    const cookieToken = request.cookies.get('auth-token')?.value
+    const token = bearerToken || cookieToken
+
+    console.log(`🗑️ REMOVE Cover Photo from collection: ${slug}`)
+
+    if (!token) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const payload = AuthService.verifyToken(token)
+    if (!payload) {
+      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+    }
+
+    // Get collection to verify ownership
+    const collection = await prisma.collection.findUnique({
+      where: { slug },
+      select: { id: true, ownerId: true }
+    })
+
+    if (!collection) {
+      return NextResponse.json({ error: 'Collection not found' }, { status: 404 })
+    }
+
+    if (collection.ownerId !== payload.userId && payload.role !== 'admin') {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    }
+
+    // Remove cover photo
+    await prisma.collection.update({
+      where: { id: collection.id },
+      data: {
+        coverPhotoId: null,
+        updatedAt: new Date()
+      }
+    })
+
+    console.log(`✅ Cover photo removed`)
+
+    return NextResponse.json({
+      success: true,
+      message: 'Cover photo removed successfully'
+    })
+
+  } catch (error) {
+    console.error('❌ REMOVE Cover Photo error:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

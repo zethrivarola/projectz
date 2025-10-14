@@ -89,10 +89,12 @@ const processRaw = useCallback(async () => {
     const startTime = Date.now()
 
     try {
+		const token = localStorage.getItem('auth-token')
       const response = await fetch(`/api/photos/${photo.id}/process-raw`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+		  'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({ settings }),
       })
@@ -588,3 +590,4 @@ const processRaw = useCallback(async () => {
     </div>
   )
 }
+

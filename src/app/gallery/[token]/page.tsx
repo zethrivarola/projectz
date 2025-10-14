@@ -412,10 +412,10 @@ const navigatePhoto = useCallback((direction: number) => {
   }
 
   const { collection, photos } = shareData
-  const design = collection.design || {
-    coverLayout: 'center',
-    typography: {
-      titleFont: 'Inter',
+  const design = collection?.design || {
+  coverLayout: 'center',
+  typography: {
+    titleFont: 'Inter',
       titleSize: 48,
       titleColor: '#ffffff'
     },

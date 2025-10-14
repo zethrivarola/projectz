@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { AuthService } from '@/lib/auth'
-import { storage } from '@/lib/storage'
+import { prisma } from '@/lib/prisma'
 
+// GET /api/gallery/[token] - Access shared gallery with token
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ token: string }> }
@@ -9,71 +9,114 @@ export async function GET(
   try {
     const { token } = await params
 
-    // Get share record by token
-    const sharesMap = await storage.getShares()
-    const shareRecord = sharesMap.get(token)
+    console.log(`🔗 Accessing gallery with token: ${token}`)
 
-    if (!shareRecord) {
+    // Find the share link
+    const shareLink = await prisma.enhancedShareLink.findUnique({
+      where: { token: token },
+      include: {
+        collection: {
+          include: {
+            photos: {
+              where: { processingStatus: 'completed' },
+              orderBy: { orderIndex: 'asc' },
+              select: {
+                id: true,
+                filename: true,
+                originalFilename: true,
+                thumbnailUrl: true,
+                webUrl: true,
+                highResUrl: true,
+                originalUrl: true,
+                width: true,
+                height: true,
+                isRaw: true,
+                orderIndex: true,
+                isStarred: true,
+                processingStatus: true,
+                createdAt: true,
+              }
+            },
+            coverPhoto: {
+              select: {
+                id: true,
+                thumbnailUrl: true,
+                webUrl: true
+              }
+            }
+          }
+        }
+      }
+    })
+
+    if (!shareLink) {
+      console.log(`❌ Share link not found for token: ${token}`)
       return NextResponse.json({ error: 'Gallery not found' }, { status: 404 })
     }
 
-    // Check if share has expired
-    if (shareRecord.expiresAt && new Date() > shareRecord.expiresAt) {
+    // Check if link is expired
+    if (shareLink.expiresAt && new Date() > shareLink.expiresAt) {
+      console.log(`❌ Share link expired: ${token}`)
       return NextResponse.json({ error: 'Gallery link has expired' }, { status: 410 })
     }
 
-    // Check if password is required
-    if (shareRecord.password) {
-      return NextResponse.json({
-        requiresPassword: true,
-        message: 'This gallery is password protected'
+    // Check if link is active
+    if (!shareLink.isActive) {
+      console.log(`❌ Share link is inactive: ${token}`)
+      return NextResponse.json({ error: 'Gallery is no longer available' }, { status: 403 })
+    }
+
+    // Check password if required
+    const { searchParams } = new URL(request.url)
+    const providedPassword = searchParams.get('password')
+
+    if (shareLink.passwordHash && !providedPassword) {
+      return NextResponse.json({ 
+        error: 'Password required',
+        requiresPassword: true 
       }, { status: 401 })
     }
 
-    // Get collection and photos
-    const collectionsMap = await storage.getCollections()
-    const photosMap = await storage.getPhotos()
-
-    const collection = collectionsMap.get(shareRecord.collectionId)
-    if (!collection) {
-      return NextResponse.json({ error: 'Collection not found' }, { status: 404 })
+    if (shareLink.passwordHash && providedPassword) {
+  const bcrypt = await import('bcryptjs')
+  const isValid = await bcrypt.default.compare(providedPassword, shareLink.passwordHash)
+  
+  if (!isValid) {
+        return NextResponse.json({ error: 'Invalid password' }, { status: 401 })
+      }
     }
 
-    // Get photos for this collection
-    const photos = Array.from(photosMap.values())
-      .filter(photo => photo.collectionId === shareRecord.collectionId)
-      .sort((a, b) => a.orderIndex - b.orderIndex)
+    // Update access statistics
+    await prisma.enhancedShareLink.update({
+  where: { id: shareLink.id },
+  data: {
+    currentViews: { increment: 1 }
+  }
+})
 
-    // Update access count and last accessed time
-    shareRecord.accessCount += 1
-    shareRecord.lastAccessedAt = new Date()
-    await storage.setShare(token, shareRecord)
+    console.log(`✅ Gallery accessed: ${shareLink.collection.title} (${shareLink.collection.photos.length} photos)`)
 
-    console.log(`📱 Public gallery accessed: ${collection.title} (${photos.length} photos)`)
-
+    // Return gallery data
     return NextResponse.json({
-      shareToken: token,
-      collection: {
-        id: collection.id,
-        title: collection.title,
-        description: collection.description,
-        slug: collection.slug,
-        coverPhoto: collection.coverPhoto,
-        design: collection.design,
-        _count: {
-          photos: photos.length
-        }
+  collection: {
+    id: shareLink.collection.id,
+        title: shareLink.collection.title,
+        description: shareLink.collection.description,
+        slug: shareLink.collection.slug,
+        coverPhoto: shareLink.collection.coverPhoto,
+        tags: shareLink.collection.tags,
+        dateTaken: shareLink.collection.dateTaken,
+        createdAt: shareLink.collection.createdAt,
       },
-      photos: photos.map(photo => ({
-        id: photo.id,
-        filename: photo.filename,
-        originalFilename: photo.originalFilename,
-        thumbnailUrl: photo.thumbnailUrl,
-        webUrl: photo.webUrl,
-        originalUrl: photo.originalUrl
-      })),
-      isExpired: false,
-      requiresPassword: false
+      photos: shareLink.collection.photos,
+      shareSettings: {
+        downloadsEnabled: shareLink.allowDownload,
+        favoritesEnabled: shareLink.allowFavorites,
+        commentsEnabled: shareLink.allowComments,
+        watermarkEnabled: false,
+        expiresAt: shareLink.expiresAt,
+        accessCount: shareLink.accessCount + 1
+      }
     })
 
   } catch (error) {
@@ -85,85 +128,61 @@ export async function GET(
   }
 }
 
+// POST /api/gallery/[token] - Verify password for protected gallery
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ token: string }> }
 ) {
   try {
     const { token } = await params
-    const { password } = await request.json()
+    const body = await request.json()
+    const { password } = body
 
-    // Get share record by token
-    const sharesMap = await storage.getShares()
-    const shareRecord = sharesMap.get(token)
+    console.log(`🔐 Verifying password for token: ${token}`)
 
-    if (!shareRecord) {
+    const shareLink = await prisma.enhancedShareLink.findUnique({
+  where: { token: token },
+      select: {
+        id: true,
+        passwordHash: true,
+        isActive: true,
+        expiresAt: true
+      }
+    })
+
+    if (!shareLink) {
       return NextResponse.json({ error: 'Gallery not found' }, { status: 404 })
     }
 
-    // Check if share has expired
-    if (shareRecord.expiresAt && new Date() > shareRecord.expiresAt) {
+    if (shareLink.expiresAt && new Date() > shareLink.expiresAt) {
       return NextResponse.json({ error: 'Gallery link has expired' }, { status: 410 })
     }
 
-    // Verify password
-    if (!shareRecord.password) {
-      return NextResponse.json({ error: 'Password not required' }, { status: 400 })
+    if (!shareLink.isActive) {
+      return NextResponse.json({ error: 'Gallery is no longer available' }, { status: 403 })
     }
 
-    const isValidPassword = await AuthService.verifyPassword(password, shareRecord.password)
-    if (!isValidPassword) {
-      return NextResponse.json({ error: 'Incorrect password' }, { status: 401 })
+    if (!shareLink.passwordHash) {
+      return NextResponse.json({ error: 'Gallery is not password protected' }, { status: 400 })
     }
 
-    // Get collection and photos
-    const collectionsMap = await storage.getCollections()
-    const photosMap = await storage.getPhotos()
+    const bcrypt = await import('bcryptjs')
+const isValid = await bcrypt.default.compare(password, shareLink.passwordHash)
 
-    const collection = collectionsMap.get(shareRecord.collectionId)
-    if (!collection) {
-      return NextResponse.json({ error: 'Collection not found' }, { status: 404 })
+    if (!isValid) {
+      console.log(`❌ Invalid password attempt for token: ${token}`)
+      return NextResponse.json({ error: 'Invalid password' }, { status: 401 })
     }
 
-    // Get photos for this collection
-    const photos = Array.from(photosMap.values())
-      .filter(photo => photo.collectionId === shareRecord.collectionId)
-      .sort((a, b) => a.orderIndex - b.orderIndex)
+    console.log(`✅ Password verified for token: ${token}`)
 
-    // Update access count and last accessed time
-    shareRecord.accessCount += 1
-    shareRecord.lastAccessedAt = new Date()
-    await storage.setShare(token, shareRecord)
-
-    console.log(`🔓 Password-protected gallery accessed: ${collection.title}`)
-
-    return NextResponse.json({
-      shareToken: token,
-      collection: {
-        id: collection.id,
-        title: collection.title,
-        description: collection.description,
-        slug: collection.slug,
-        coverPhoto: collection.coverPhoto,
-        design: collection.design,
-        _count: {
-          photos: photos.length
-        }
-      },
-      photos: photos.map(photo => ({
-        id: photo.id,
-        filename: photo.filename,
-        originalFilename: photo.originalFilename,
-        thumbnailUrl: photo.thumbnailUrl,
-        webUrl: photo.webUrl,
-        originalUrl: photo.originalUrl
-      })),
-      isExpired: false,
-      requiresPassword: false
+    return NextResponse.json({ 
+      success: true,
+      message: 'Password verified' 
     })
 
   } catch (error) {
-    console.error('❌ Gallery password verification error:', error)
+    console.error('❌ Password verification error:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

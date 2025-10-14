@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { AuthService } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
-import { v4 as uuidv4 } from 'uuid'
-import { storage } from '@/lib/storage'
 
 const CreateCollectionSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
-  visibility: z.enum(['public', 'private', 'password_protected']).default('private'),
+  visibility: z.enum(['public', 'private', 'password_protected']).optional(),
   password: z.string().optional(),
   tags: z.array(z.string()).default([]),
   dateTaken: z.string().datetime().optional(),
@@ -16,28 +15,25 @@ const CreateCollectionSchema = z.object({
 // GET /api/collections - List collections
 export async function GET(request: NextRequest) {
   try {
-    // Get token from Authorization header or cookies
     const authHeader = request.headers.get('authorization')
     const bearerToken = authHeader?.replace('Bearer ', '')
     const cookieToken = request.cookies.get('auth-token')?.value
     const token = bearerToken || cookieToken
 
-    console.log('🔍 Collections GET - Auth header:', authHeader ? 'Present' : 'Missing')
-    console.log('🔍 Collections GET - Cookie:', cookieToken ? 'Present' : 'Missing')
-    console.log('🔍 Collections GET - Using token:', token ? 'Present' : 'Missing')
+    console.log('🔍 Collections GET - Token:', token ? 'Present' : 'Missing')
 
     if (!token) {
-      console.log('❌ Collections GET - No token found')
+      console.log('❌ No token found')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const payload = AuthService.verifyToken(token)
     if (!payload) {
-      console.log('❌ Collections GET - Invalid token')
+      console.log('❌ Invalid token')
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
 
-    console.log(`📋 Fetching collections for user: ${payload.email}`)
+    console.log(`📋 Fetching collections for user: ${payload.email} (${payload.role})`)
 
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') || '1')
@@ -45,76 +41,81 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || ''
     const starred = searchParams.get('starred') === 'true'
 
-    // Get collections and photos from persistent storage
-    const collectionsMap = await storage.getCollections()
-    const photosMap = await storage.getPhotos()
+    // Build where clause
+    interface CollectionWhere {
+  ownerId?: string
+  isStarred?: boolean
+  OR?: Array<{
+    title?: { contains: string; mode: 'insensitive' }
+    description?: { contains: string; mode: 'insensitive' }
+  }>
+}
 
-    // Calculate actual photo counts for each collection
-    const collectionPhotoCount = new Map<string, number>()
-    for (const photo of photosMap.values()) {
-      const currentCount = collectionPhotoCount.get(photo.collectionId) || 0
-      collectionPhotoCount.set(photo.collectionId, currentCount + 1)
+const where: CollectionWhere = {
+  // SUPER_ADMIN ve todas, PHOTOGRAPHER solo las suyas
+  ...(payload.role !== 'SUPER_ADMIN' && { ownerId: payload.userId })
+}
+
+    if (search) {
+      where.OR = [
+        { title: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } }
+      ]
     }
 
-    console.log(`📸 Photo counts per collection:`, Object.fromEntries(collectionPhotoCount))
+    if (starred) {
+      where.isStarred = true
+    }
 
-    // Filter collections by user ownership and search criteria
-    const collections = Array.from(collectionsMap.values()).filter(collection => {
-      // Check ownership
-      if (collection.ownerId !== payload.userId && payload.role !== 'admin') {
-        return false
+    // Get collections from PostgreSQL
+    const [collections, total] = await Promise.all([
+      prisma.collection.findMany({
+        where,
+        include: {
+          _count: {
+            select: { photos: true }
+          },
+          coverPhoto: {
+            select: {
+              id: true,
+              thumbnailUrl: true,
+              webUrl: true
+            }
+          },
+          owner: {
+            select: {
+              name: true,
+              email: true
+            }
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit
+      }),
+      prisma.collection.count({ where })
+    ])
+
+    const formattedCollections = collections.map(collection => ({
+      id: collection.id,
+      title: collection.title,
+      description: collection.description,
+      slug: collection.slug,
+      visibility: collection.visibility,
+      isStarred: collection.isStarred,
+      isFeatured: collection.isFeatured,
+      tags: collection.tags,
+      createdAt: collection.createdAt,
+      updatedAt: collection.updatedAt,
+      dateTaken: collection.dateTaken,
+      coverPhoto: collection.coverPhoto,
+      owner: collection.owner,
+      _count: {
+        photos: collection._count.photos
       }
-
-      // Check search
-      if (search && !collection.title.toLowerCase().includes(search.toLowerCase()) &&
-          !collection.description?.toLowerCase().includes(search.toLowerCase())) {
-        return false
-      }
-
-      // Check starred filter
-      if (starred && !collection.isStarred) {
-        return false
-      }
-
-      return true
-    })
-
-    // Sort by creation date (newest first)
-    collections.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-
-    // Pagination
-    const total = collections.length
-    const startIndex = (page - 1) * limit
-    const paginatedCollections = collections.slice(startIndex, startIndex + limit)
-
-    // Transform to API format with actual photo counts INCLUDING design data
-    const formattedCollections = paginatedCollections.map(collection => {
-      const actualPhotoCount = collectionPhotoCount.get(collection.id) || 0
-      return {
-        id: collection.id,
-        title: collection.title,
-        description: collection.description,
-        slug: collection.slug,
-        visibility: collection.visibility,
-        isStarred: collection.isStarred,
-        isFeatured: collection.isFeatured,
-        tags: collection.tags,
-        createdAt: collection.createdAt,
-        updatedAt: collection.updatedAt,
-        dateTaken: collection.dateTaken,
-        coverPhoto: collection.coverPhoto,
-        design: collection.design,
-        _count: {
-          photos: actualPhotoCount
-        }
-      }
-    })
+    }))
 
     console.log(`✅ Returning ${formattedCollections.length} collections`)
-    
-    // Debug: Log collections with design data
-    const collectionsWithDesign = formattedCollections.filter(c => c.design)
-    console.log(`🎨 Collections with design settings: ${collectionsWithDesign.length}`)
 
     return NextResponse.json({
       collections: formattedCollections,
@@ -138,95 +139,97 @@ export async function GET(request: NextRequest) {
 // POST /api/collections - Create collection
 export async function POST(request: NextRequest) {
   try {
-    // Get token from Authorization header or cookies
     const authHeader = request.headers.get('authorization')
     const bearerToken = authHeader?.replace('Bearer ', '')
     const cookieToken = request.cookies.get('auth-token')?.value
     const token = bearerToken || cookieToken
 
-    console.log('🔍 Collections POST - Auth header:', authHeader ? 'Present' : 'Missing')
-    console.log('🔍 Collections POST - Cookie:', cookieToken ? 'Present' : 'Missing')
-    console.log('🔍 Collections POST - Using token:', token ? 'Present' : 'Missing')
+    console.log('🔍 Collections POST - Token:', token ? 'Present' : 'Missing')
 
     if (!token) {
-      console.log('❌ Collections POST - No token found')
+      console.log('❌ No token found')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const payload = AuthService.verifyToken(token)
     if (!payload) {
-      console.log('❌ Collections POST - Invalid token')
+      console.log('❌ Invalid token')
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
 
     const body = await request.json()
     const data = CreateCollectionSchema.parse(body)
 
-    console.log(`🔥 Creating new collection: "${data.title}" for user: ${payload.email}`)
+    console.log(`🔥 Creating collection: "${data.title}" for user: ${payload.email} (${payload.role})`)
 
-    // Get existing collections to check for slug conflicts
-    const collectionsMap = await storage.getCollections()
+    // Determinar visibilidad por rol
+    let visibility = data.visibility
+    if (!visibility) {
+      // Default basado en rol
+      visibility = payload.role === 'SUPER_ADMIN' ? 'public' : 'private'
+    }
 
-    // Generate unique ID and slug
-    const collectionId = uuidv4()
+    // Validación: Fotógrafos solo pueden crear colecciones privadas
+    if (payload.role === 'PHOTOGRAPHER' && visibility !== 'private') {
+      console.log('❌ Photographer attempted to create non-private collection')
+      return NextResponse.json(
+        { error: 'Photographers can only create private collections' },
+        { status: 403 }
+      )
+    }
+
+    // Verificar límite de colecciones para fotógrafos
+    if (payload.role === 'PHOTOGRAPHER') {
+      const user = await prisma.user.findUnique({
+        where: { id: payload.userId },
+        select: { maxCollections: true, _count: { select: { collections: true } } }
+      })
+
+      if (user && user._count.collections >= user.maxCollections) {
+        console.log(`❌ Photographer reached collection limit: ${user.maxCollections}`)
+        return NextResponse.json(
+          { error: `Collection limit reached (${user.maxCollections} collections max)` },
+          { status: 403 }
+        )
+      }
+    }
+
+    // Generate unique slug
     let slug = AuthService.generateSlug(data.title)
     let counter = 1
-    while (Array.from(collectionsMap.values()).some(c => c.slug === slug)) {
+    while (await prisma.collection.findUnique({ where: { slug } })) {
       slug = `${AuthService.generateSlug(data.title)}-${counter}`
       counter++
     }
 
     // Hash password if provided
     let passwordHash = null
-    if (data.visibility === 'password_protected' && data.password) {
+    if (visibility === 'password_protected' && data.password) {
       passwordHash = await AuthService.hashPassword(data.password)
     }
 
-    // Create new collection with default design settings
-    const newCollection = {
-      id: collectionId,
-      title: data.title,
-      description: data.description || '',
-      slug,
-      ownerId: payload.userId,
-      visibility: data.visibility,
-      passwordHash,
-      isStarred: false,
-      isFeatured: false,
-      tags: data.tags,
-      dateTaken: data.dateTaken ? new Date(data.dateTaken) : null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      photoCount: 0,
-      coverPhoto: null as { id: string; thumbnailUrl: string; webUrl: string } | null,
-      // Add default design settings for new collections
-      design: {
-        coverLayout: 'center',
-        typography: {
-          titleFont: 'Playfair Display',
-          titleSize: 48,
-          titleColor: '#ffffff'
-        },
-        colors: {
-          background: '#ffffff',
-          accent: '#000000'
-        },
-        grid: {
-          columns: 4,
-          spacing: 12
-        },
-        coverFocus: {
-          x: 50,
-          y: 50
+    // Create collection in PostgreSQL
+    const newCollection = await prisma.collection.create({
+      data: {
+        title: data.title,
+        description: data.description || null,
+        slug,
+        ownerId: payload.userId,
+        visibility,
+        passwordHash,
+        tags: data.tags,
+        dateTaken: data.dateTaken ? new Date(data.dateTaken) : null,
+      },
+      include: {
+        _count: {
+          select: { photos: true }
         }
       }
-    }
+    })
 
-    // Save to persistent storage so it's accessible by other routes
-    await storage.setCollection(collectionId, newCollection)
+    console.log(`✅ Collection "${data.title}" created with ID: ${newCollection.id} (visibility: ${visibility})`)
 
-    // Format response including design data
-    const response = {
+    return NextResponse.json({
       id: newCollection.id,
       title: newCollection.title,
       description: newCollection.description,
@@ -238,16 +241,11 @@ export async function POST(request: NextRequest) {
       dateTaken: newCollection.dateTaken,
       createdAt: newCollection.createdAt,
       updatedAt: newCollection.updatedAt,
-      coverPhoto: newCollection.coverPhoto,
-      design: newCollection.design,
+      coverPhoto: null,
       _count: {
-        photos: newCollection.photoCount
+        photos: newCollection._count.photos
       }
-    }
-
-    console.log(`✅ Collection "${data.title}" created successfully with ID: ${collectionId}`)
-
-    return NextResponse.json(response, { status: 201 })
+    }, { status: 201 })
 
   } catch (error) {
     console.error('❌ Collections POST error:', error)

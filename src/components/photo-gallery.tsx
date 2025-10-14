@@ -299,16 +299,17 @@ const navigateToNext = useCallback((direction: number) => {
           )}
 
           {/* Image */}
-          <div className="relative max-w-full max-h-full">
+          <div className="relative flex items-center justify-center" style={{ maxHeight: 'calc(100vh - 200px)' }}>
             <img
-              src={currentPhoto.webUrl}
-              alt={currentPhoto.filename}
-              className="max-w-full max-h-full object-contain transition-transform duration-200"
-              style={{
-                transform: `scale(${zoom}) rotate(${rotation}deg)`,
-                transformOrigin: 'center'
-              }}
-            />
+  src={currentPhoto.webUrl}
+  alt={currentPhoto.filename}
+  className="max-w-full max-h-screen object-contain transition-transform duration-200"
+  style={{
+    transform: `scale(${zoom}) rotate(${rotation}deg)`,
+    transformOrigin: 'center',
+    maxHeight: 'calc(100vh - 200px)'
+  }}
+/>
 
             {/* File Type Badge */}
             {currentPhoto.isRaw && (
