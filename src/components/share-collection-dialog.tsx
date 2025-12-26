@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import {
   Copy,
   Check,
@@ -27,7 +28,10 @@ import {
   Globe,
   RefreshCw,
   Mail,
-  Calendar
+  Calendar,
+  Info,
+  Plus,
+  X
 } from "lucide-react"
 
 const ShareCollectionSchema = z.object({
@@ -51,11 +55,20 @@ interface ShareCollectionDialogProps {
   }
 }
 
-interface ShareInfo {
-  accessToken: string
+interface ShareLink {
+  id: string
+  token: string
   shareUrl: string
+  allowDownload: boolean
+  allowFavorites: boolean
+  allowComments: boolean
   expiresAt?: string
+  isActive: boolean
+  requiresPassword: boolean
+  customMessage?: string
+  accessCount: number
   createdAt: string
+  updatedAt: string
 }
 
 export function ShareCollectionDialog({
@@ -64,7 +77,8 @@ export function ShareCollectionDialog({
   collection
 }: ShareCollectionDialogProps) {
   const [isLoading, setIsLoading] = useState(false)
-  const [shareInfo, setShareInfo] = useState<ShareInfo | null>(null)
+const [shareLinks, setShareLinks] = useState<ShareLink[]>([])
+const [showCreateForm, setShowCreateForm] = useState(false)
   const [copied, setCopied] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
 
@@ -87,28 +101,26 @@ export function ShareCollectionDialog({
 
   const visibility = watch('visibility')
 
-  // Load existing share info when dialog opens
-  
-
-  const loadExistingShare = useCallback(async () => {
-    try {
-      const response = await fetch(`/api/collections/${collection.slug}/share`)
-      if (response.ok) {
-        const data = await response.json()
-        if (data.share) {
-          setShareInfo(data.share)
-        }
-      }
-    } catch (error) {
-      console.error('Error loading share info:', error)
+const loadExistingShares = useCallback(async () => {
+  try {
+    const token = localStorage.getItem('auth-token')
+    const response = await fetch(`/api/collections/${collection.slug}/share`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    })
+    if (response.ok) {
+      const data = await response.json()
+      setShareLinks(data.shareLinks || [])
     }
-  }, [collection, setShareInfo]);
+  } catch (error) {
+    console.error('Error al cargar links compartidos:', error)
+  }
+}, [collection.slug]);
 
-useEffect(() => {
+  useEffect(() => {
     if (open && collection.id) {
-      loadExistingShare()
+loadExistingShares()
     }
-  }, [open, collection.id, loadExistingShare])
+  }, [open, collection.id, loadExistingShares])
 
   const generateShareUrl = (accessToken: string) => {
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
@@ -116,317 +128,419 @@ useEffect(() => {
   }
 
   const onSubmit = async (data: ShareCollectionData) => {
+    setIsLoading(true)
+    try {
+      const token = localStorage.getItem('auth-token')
+
+      const response = await fetch(`/api/collections/${collection.slug}/share`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(data),
+      })
+
+      if (!response.ok) {
+        console.log('❌ Error en respuesta de API:', response.status, response.statusText)
+        const errorData = await response.json()
+        console.log('❌ Detalles del error:', errorData)
+        throw new Error(errorData.error || 'Error al crear enlace de compartir')
+      }
+const result = await response.json()
+console.log('📦 Respuesta de API de compartir:', result)
+
+// Agregar el nuevo link a la lista
+const newLink: ShareLink = {
+  id: result.shareLink.id,
+  token: result.shareLink.accessToken,
+  shareUrl: result.shareLink.shareUrl,
+  allowDownload: result.shareLink.allowDownload,
+  allowFavorites: result.shareLink.allowFavorites,
+  allowComments: result.shareLink.allowComments,
+  expiresAt: result.shareLink.expiresAt,
+  isActive: result.shareLink.isActive,
+  requiresPassword: result.shareLink.requiresPassword,
+  customMessage: result.shareLink.customMessage,
+  accessCount: 0,
+  createdAt: result.shareLink.createdAt,
+  updatedAt: result.shareLink.createdAt
+}
+
+setShareLinks(prev => [newLink, ...prev])
+setShowCreateForm(false)
+reset() // Resetear el formulario
+
+    } catch (error) {
+      console.error('Error al crear enlace de compartir:', error)
+      alert(error instanceof Error ? error.message : 'Error al crear enlace de compartir')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+const copyToClipboard = async (url: string) => {
+  try {
+    await navigator.clipboard.writeText(url)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  } catch (error) {
+    console.error('Error al copiar:', error)
+  }
+}
+
+	const deactivateLink = async (linkId: string) => {
+  if (!confirm('¿Desactivar este enlace? Los clientes ya no podrán acceder con él.')) {
+    return
+  }
+
   setIsLoading(true)
   try {
     const token = localStorage.getItem('auth-token')
-    
     const response = await fetch(`/api/collections/${collection.slug}/share`, {
-      method: 'POST',
+      method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,  // ← Agregar esta línea
+        'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify(data),
+      body: JSON.stringify({ shareLinkId: linkId })
     })
-    
-    if (!response.ok) {
-  console.log('❌ API Error Response:', response.status, response.statusText)
-  const errorData = await response.json()
-  console.log('❌ Error Details:', errorData)
-  throw new Error(errorData.error || 'Failed to create share link')
-}
 
-const result = await response.json()
-console.log('📦 Share API Response:', result)
-setShareInfo({
-      accessToken: result.shareLink.accessToken,  // ← Cambiar result.accessToken
-      shareUrl: result.shareLink.shareUrl,        // ← Usar shareUrl del backend
-      expiresAt: result.shareLink.expiresAt,
-      createdAt: result.shareLink.createdAt,
-    })
+    if (response.ok) {
+      setShareLinks(prev => prev.filter(link => link.id !== linkId))
+      alert('Enlace desactivado exitosamente')
+    }
   } catch (error) {
-    console.error('Error creating share link:', error)
-    alert(error instanceof Error ? error.message : 'Failed to create share link')
+    console.error('Error al desactivar enlace:', error)
+    alert('Error al desactivar enlace')
   } finally {
     setIsLoading(false)
   }
 }
 
-  const regenerateLink = async () => {
-    setIsLoading(true)
-    try {
-      const response = await fetch(`/api/collections/${collection.slug}/share`, {
-        method: 'DELETE',
-      })
+const permanentlyDeleteLink = async (linkId: string) => {
+  if (!confirm('¿Eliminar permanentemente este enlace? Esta acción no se puede deshacer.')) {
+    return
+  }
 
-      if (response.ok) {
-        setShareInfo(null)
-        // Trigger form submission to create new share
-        handleSubmit(onSubmit)()
+  setIsLoading(true)
+  try {
+    const token = localStorage.getItem('auth-token')
+    const response = await fetch(`/api/collections/${collection.slug}/share/${linkId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`
       }
-    } catch (error) {
-      console.error('Error regenerating link:', error)
-    } finally {
-      setIsLoading(false)
+    })
+
+    if (response.ok) {
+      setShareLinks(prev => prev.filter(link => link.id !== linkId))
+      alert('Enlace eliminado permanentemente')
+    } else {
+      const error = await response.json()
+      alert(error.error || 'Error al eliminar enlace')
     }
+  } catch (error) {
+    console.error('Error al eliminar enlace:', error)
+    alert('Error al eliminar enlace')
+  } finally {
+    setIsLoading(false)
   }
+}
 
-  const copyToClipboard = async () => {
-    if (shareInfo?.shareUrl) {
-      try {
-        await navigator.clipboard.writeText(shareInfo.shareUrl)
-        setCopied(true)
-        setTimeout(() => setCopied(false), 2000)
-      } catch (error) {
-        console.error('Failed to copy:', error)
-      }
-    }
-  }
+return (
+  <Dialog open={open} onOpenChange={onOpenChange}>
+    <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-2">
+          <Share2 className="h-5 w-5" />
+          Compartir Colección
+        </DialogTitle>
+        <DialogDescription>
+          Gestiona los enlaces privados de "{collection.title}"
+        </DialogDescription>
+      </DialogHeader>
 
-  const sendEmail = async () => {
-    const recipientEmail = watch('recipientEmail')
-    const message = watch('message')
+      <div className="space-y-6">
+        {/* Lista de Links Activos */}
+        {shareLinks.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium">Enlaces Activos ({shareLinks.length})</h3>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowCreateForm(true)}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Nuevo Enlace
+              </Button>
+            </div>
 
-    if (!recipientEmail || !shareInfo) return
+            {shareLinks.map((link, index) => (
+              <Card key={link.id}>
+                <CardContent className="p-4">
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h4 className="font-medium">Enlace #{index + 1}</h4>
+                          {link.requiresPassword && (
+                            <Lock className="h-3 w-3 text-muted-foreground" />
+                          )}
+                          {!link.isActive && (
+                            <Badge variant="destructive" className="text-xs">
+                              Desactivado
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground space-y-1">
+                          <div>
+                            Creado: {new Date(link.createdAt).toLocaleDateString('es-ES')}
+                            {link.expiresAt && (
+                              <span> • Expira: {new Date(link.expiresAt).toLocaleDateString('es-ES')}</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span>👁️ {link.accessCount} vistas</span>
+                            <span>{link.requiresPassword ? '🔒 Con contraseña' : '🌐 Sin contraseña'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
 
-    setIsLoading(true)
-    try {
-      await fetch(`/api/collections/${collection.slug}/share/email`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          recipientEmail,
-          message,
-          shareUrl: shareInfo.shareUrl,
-        }),
-      })
+                    <div className="flex gap-2">
+                      <Input
+                        value={link.shareUrl}
+                        readOnly
+                        className="font-mono text-xs flex-1"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => copyToClipboard(link.shareUrl)}
+                      >
+                        {copied ? (
+                          <Check className="h-4 w-4" />
+                        ) : (
+                          <Copy className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
 
-      // Show success message
-      console.log('Email sent successfully')
-    } catch (error) {
-      console.error('Error sending email:', error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
+                    {link.customMessage && (
+                      <div className="text-xs text-muted-foreground bg-muted p-2 rounded">
+                        <Mail className="h-3 w-3 inline mr-1" />
+                        {link.customMessage}
+                      </div>
+                    )}
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-  <DialogTitle className="flex items-center gap-2">
-    <Share2 className="h-5 w-5" />
-    Share Collection
-  </DialogTitle>
-  <DialogDescription>
-    Share "{collection.title}" with clients
-  </DialogDescription>
-</DialogHeader>
-
-        <div className="space-y-6">
-          {/* Existing Share Link */}
-          {shareInfo && (
-            <Card>
-              <CardContent className="p-4">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-medium">Active Share Link</h4>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={regenerateLink}
-                      disabled={isLoading}
-                    >
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      Regenerate
-                    </Button>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Input
-                      value={shareInfo.shareUrl}
-                      readOnly
-                      className="font-mono text-sm"
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={copyToClipboard}
-                    >
-                      {copied ? (
-                        <Check className="h-4 w-4" />
+                    <div className="flex gap-2 pt-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => window.open(link.shareUrl, '_blank')}
+                        className="flex-1"
+                      >
+                        <Eye className="h-3 w-3 mr-2" />
+                        Ver
+                      </Button>
+{link.isActive ? (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => deactivateLink(link.id)}
+                          disabled={isLoading}
+                        >
+                          <X className="h-3 w-3 mr-2" />
+                          Desactivar
+                        </Button>
                       ) : (
-                        <Copy className="h-4 w-4" />
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => permanentlyDeleteLink(link.id)}
+                          disabled={isLoading}
+                        >
+                          <X className="h-3 w-3 mr-2" />
+                          Eliminar
+                        </Button>
                       )}
-                    </Button>
+
+                    </div>
                   </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
 
-                  <div className="text-xs text-muted-foreground">
-                    Created: {new Date(shareInfo.createdAt).toLocaleDateString()}
-                    {shareInfo.expiresAt && (
-                      <span> • Expires: {new Date(shareInfo.expiresAt).toLocaleDateString()}</span>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+        {/* Botón crear primer link */}
+        {shareLinks.length === 0 && !showCreateForm && (
+          <div className="text-center py-8">
+            <Share2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <p className="text-muted-foreground mb-4">
+              No hay enlaces compartidos para esta colección
+            </p>
+            <Button onClick={() => setShowCreateForm(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Crear Primer Enlace
+            </Button>
+          </div>
+        )}
 
-          {/* Share Settings Form */}
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            {/* Visibility Settings */}
-            <div className="space-y-3">
-              <Label>Collection Visibility</Label>
-              <div className="grid grid-cols-2 gap-3">
-                <Card
-                  className={`cursor-pointer transition-colors ${
-                    visibility === 'public' ? 'ring-2 ring-primary' : ''
-                  }`}
-                  onClick={() => setValue('visibility', 'public')}
-                >
-                  <CardContent className="p-4 text-center">
-                    <Globe className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
-                    <h4 className="font-medium">Public</h4>
-                    <p className="text-xs text-muted-foreground">Anyone with link can view</p>
-                    <input
-                      type="radio"
-                      value="public"
-                      {...register('visibility')}
-                      className="sr-only"
-                    />
-                  </CardContent>
-                </Card>
-
-                <Card
-                  className={`cursor-pointer transition-colors ${
-                    visibility === 'password_protected' ? 'ring-2 ring-primary' : ''
-                  }`}
-                  onClick={() => setValue('visibility', 'password_protected')}
-                >
-                  <CardContent className="p-4 text-center">
-                    <Lock className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
-                    <h4 className="font-medium">Password Protected</h4>
-                    <p className="text-xs text-muted-foreground">Requires password to view</p>
-                    <input
-                      type="radio"
-                      value="password_protected"
-                      {...register('visibility')}
-                      className="sr-only"
-                    />
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-
-            {/* Password Field */}
-            {visibility === 'password_protected' && (
-              <div className="space-y-2">
-                <Label htmlFor="password">Collection Password</Label>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="Enter password for collection access"
-                    {...register('password')}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-2 top-1/2 -translate-y-1/2"
-                    onClick={() => setShowPassword(!showPassword)}
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-                {errors.password && (
-                  <p className="text-sm text-destructive">{errors.password.message}</p>
-                )}
-              </div>
-            )}
-
-            {/* Expiry Date */}
-            <div className="space-y-2">
-              <Label htmlFor="expiresAt">Expiry Date (Optional)</Label>
-              <div className="relative">
-                <Input
-                  id="expiresAt"
-                  type="datetime-local"
-                  {...register('expiresAt')}
-                />
-                <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Leave empty for permanent access
-              </p>
-            </div>
-
-            {/* Email Sharing */}
-            <div className="space-y-4 pt-4 border-t">
-              <h4 className="font-medium flex items-center gap-2">
-                <Mail className="h-4 w-4" />
-                Email Sharing (Optional)
-              </h4>
-
-              <div className="space-y-2">
-                <Label htmlFor="recipientEmail">Recipient Email</Label>
-                <Input
-                  id="recipientEmail"
-                  type="email"
-                  placeholder="client@example.com"
-                  {...register('recipientEmail')}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="message">Custom Message</Label>
-                <Textarea
-                  id="message"
-                  placeholder="Hi! I'm excited to share your photos with you..."
-                  rows={3}
-                  {...register('message')}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Personal message to include in the email
+        {/* Formulario de Crear Nuevo Link */}
+        {showCreateForm && (
+          <>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex gap-2">
+              <Info className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-blue-800">
+                <p className="font-medium mb-1">Enlace Privado Único</p>
+                <p className="text-blue-700">
+                  Este enlace es privado y solo funciona con el token único.
                 </p>
               </div>
             </div>
 
-            <DialogFooter className="gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                disabled={isLoading}
-              >
-                Cancel
-              </Button>
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              {/* Configuración de Visibilidad */}
+              <div className="space-y-3">
+                <Label>Configuración de Acceso</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <Card
+                    className={`cursor-pointer transition-colors ${
+                      visibility === 'public' ? 'ring-2 ring-primary' : ''
+                    }`}
+                    onClick={() => setValue('visibility', 'public')}
+                  >
+                    <CardContent className="p-4 text-center">
+                      <Globe className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
+                      <h4 className="font-medium">Sin Contraseña</h4>
+                      <p className="text-xs text-muted-foreground">Acceso directo con el enlace</p>
+                      <input
+                        type="radio"
+                        value="public"
+                        {...register('visibility')}
+                        className="sr-only"
+                      />
+                    </CardContent>
+                  </Card>
 
-              {shareInfo && watch('recipientEmail') && (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={sendEmail}
-                  disabled={isLoading}
-                >
-                  Send Email
-                </Button>
+                  <Card
+                    className={`cursor-pointer transition-colors ${
+                      visibility === 'password_protected' ? 'ring-2 ring-primary' : ''
+                    }`}
+                    onClick={() => setValue('visibility', 'password_protected')}
+                  >
+                    <CardContent className="p-4 text-center">
+                      <Lock className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
+                      <h4 className="font-medium">Con Contraseña</h4>
+                      <p className="text-xs text-muted-foreground">Requiere contraseña para ver</p>
+                      <input
+                        type="radio"
+                        value="password_protected"
+                        {...register('visibility')}
+                        className="sr-only"
+                      />
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+
+              {/* Campo de Contraseña */}
+              {visibility === 'password_protected' && (
+                <div className="space-y-2">
+                  <Label htmlFor="password">Contraseña de Acceso</Label>
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="Ingresa la contraseña para acceder"
+                      {...register('password')}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-2 top-1/2 -translate-y-1/2"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
               )}
 
-              <Button type="submit" disabled={isLoading}>
-                {isLoading ? 'Creating...' : shareInfo ? 'Update Share' : 'Create Share Link'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </div>
-      </DialogContent>
-    </Dialog>
-  )
-}
+              {/* Fecha de Expiración */}
+              <div className="space-y-2">
+                <Label htmlFor="expiresAt">Fecha de Expiración (Opcional)</Label>
+                <div className="relative">
+                  <Input
+                    id="expiresAt"
+                    type="datetime-local"
+                    {...register('expiresAt')}
+                  />
+                  <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Dejar vacío para acceso permanente
+                </p>
+              </div>
 
+              {/* Email Sharing */}
+              <div className="space-y-4 pt-4 border-t">
+                <h4 className="font-medium flex items-center gap-2">
+                  <Mail className="h-4 w-4" />
+                  Enviar por Email (Opcional)
+                </h4>
+
+                <div className="space-y-2">
+                  <Label htmlFor="recipientEmail">Email del Destinatario</Label>
+                  <Input
+                    id="recipientEmail"
+                    type="email"
+                    placeholder="cliente@ejemplo.com"
+                    {...register('recipientEmail')}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="message">Mensaje Personalizado</Label>
+                  <Textarea
+                    id="message"
+                    placeholder="¡Hola! Me complace compartir tus fotos contigo..."
+                    rows={3}
+                    {...register('message')}
+                  />
+                </div>
+              </div>
+
+              <DialogFooter className="gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setShowCreateForm(false)
+                    reset()
+                  }}
+                  disabled={isLoading}
+                >
+                  Cancelar
+                </Button>
+
+                <Button type="submit" disabled={isLoading}>
+                  {isLoading ? 'Creando...' : 'Crear Enlace'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </>
+        )}
+      </div>
+    </DialogContent>
+  </Dialog>
+)
+}

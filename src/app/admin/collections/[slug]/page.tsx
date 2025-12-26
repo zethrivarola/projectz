@@ -18,8 +18,34 @@ import {
   Check,
   Settings,
   Edit,
-  Download
+  Upload,
+  Download,
+MoreVertical,
+  Trash2,
+  Image as ImageIcon,
+GripVertical,
+  Loader2
 } from "lucide-react"
+
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  rectSortingStrategy
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { usePhotoReorder } from '@/hooks/usePhotoReorder'
 
 interface Collection {
   id: string
@@ -64,6 +90,199 @@ interface Photo {
   webUrl: string
   highResUrl: string
   originalUrl: string
+  orderIndex: number
+}
+
+// Componente para cada foto sortable
+function SortablePhotoCard({
+  photo,
+  isCover,
+  isFavorite,
+  isReorderMode,
+  isSelected,
+  onPhotoClick,
+  onToggleSelection,
+  onSetCover,
+  onToggleFavorite,
+  onDownload,
+  onDelete,
+  openMenuId,
+  setOpenMenuId
+}: {
+  photo: Photo
+  isCover: boolean
+  isFavorite: boolean
+  isReorderMode: boolean
+  isSelected: boolean
+  onPhotoClick: () => void
+  onToggleSelection: () => void
+  onSetCover: () => void
+  onToggleFavorite: () => void
+  onDownload: () => void
+  onDelete: () => void
+  openMenuId: string | null
+  setOpenMenuId: (id: string | null) => void
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id: photo.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1
+  }
+
+  return (
+    <Card
+      ref={setNodeRef}
+      style={style}
+className={`overflow-hidden hover:shadow-lg transition-all relative ${isDragging ? 'z-50' : ''}`}
+    >
+      <div className="relative bg-muted overflow-hidden group aspect-square">
+        {/* Drag Handle - Desktop only */}
+        <div
+          {...attributes}
+          {...listeners}
+          className="hidden md:flex absolute top-3 left-3 z-20 opacity-0 group-hover:opacity-100 transition-opacity cursor-move bg-white/90 backdrop-blur rounded p-1.5 shadow-lg hover:bg-white"
+        >
+          <GripVertical className="h-4 w-4 text-gray-700" />
+        </div>
+
+        <img
+          src={photo.thumbnailUrl}
+          alt={photo.originalFilename}
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 cursor-pointer"
+          draggable={false}
+onClick={isReorderMode ? onToggleSelection : onPhotoClick}
+        />
+{/* Checkbox de selección en modo reorder */}
+        {isReorderMode && (
+<div className="absolute bottom-3 left-3 z-20">
+            <div 
+              className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-all ${
+                isSelected 
+                  ? 'bg-blue-500 border-blue-500' 
+                  : 'bg-white/90 border-gray-300'
+              }`}
+              onClick={(e) => {
+                e.stopPropagation()
+                onToggleSelection()
+              }}
+            >
+              {isSelected && <Check className="w-4 h-4 text-white" />}
+            </div>
+          </div>
+        )}
+
+        {/* Badge Cover */}
+        {isCover && (
+          <div className="absolute top-3 right-3 z-10">
+            <Badge className="bg-blue-500 text-white text-xs">
+              <ImageIcon className="h-3 w-3 mr-1" />
+              Cover
+            </Badge>
+          </div>
+        )}
+
+        {/* Favorite Badge */}
+        {isFavorite && !isCover && (
+          <div className="absolute top-3 right-3 z-10">
+            <Heart className="h-5 w-5 fill-red-500 text-red-500" />
+          </div>
+        )}
+
+{/* Menu Button */}
+<div className="absolute top-3 right-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="relative">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 w-8 p-0 bg-white/90 backdrop-blur"
+              onClick={(e) => {
+                e.stopPropagation()
+                setOpenMenuId(openMenuId === photo.id ? null : photo.id)
+              }}
+            >
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+
+            {/* Dropdown Menu */}
+            {openMenuId === photo.id && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setOpenMenuId(null)}
+                />
+                <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-xl z-50">
+                  <div className="py-1">
+                    {!isCover && (
+                      <button
+                        onClick={() => {
+                          setOpenMenuId(null)
+                          onSetCover()
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
+                      >
+                        <ImageIcon className="h-4 w-4 text-blue-500" />
+                        Set as Cover
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => {
+                        setOpenMenuId(null)
+                        onToggleFavorite()
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
+                    >
+                      <Heart className={`h-4 w-4 ${isFavorite ? 'fill-red-500 text-red-500' : 'text-gray-500'}`} />
+                      {isFavorite ? 'Remove Favorite' : 'Add to Favorites'}
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setOpenMenuId(null)
+                        onDownload()
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
+                    >
+                      <Download className="h-4 w-4 text-gray-500" />
+                      Download
+                    </button>
+
+                    <div className="border-t border-gray-100 my-1"></div>
+
+                    <button
+                      onClick={() => {
+                        setOpenMenuId(null)
+                        onDelete()
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm hover:bg-red-50 text-red-600 flex items-center gap-2"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <CardContent className="pt-3">
+        <p className="text-xs text-muted-foreground truncate">
+          {photo.originalFilename}
+        </p>
+      </CardContent>
+    </Card>
+  )
 }
 
 export default function AdminCollectionPage() {
@@ -72,12 +291,40 @@ export default function AdminCollectionPage() {
   const slug = params.slug as string
   
   const [collection, setCollection] = useState<Collection | null>(null)
-  const [photos, setPhotos] = useState<Photo[]>([])
+  // const [photos, setPhotos] - REMOVED (usando sortedPhotos del hook) = useState<Photo[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [authChecked, setAuthChecked] = useState(false)
   const [favorites, setFavorites] = useState<Set<string>>(new Set())
+	const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+const [isDragging, setIsDragging] = useState(false)
+const [uploading, setUploading] = useState(false)
+const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 })
 
+const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null)
+const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0)
+const [activeId, setActiveId] = useState<string | null>(null)
+const [isReorderMode, setIsReorderMode] = useState(false)
+  const [selectedForReorder, setSelectedForReorder] = useState<Set<string>>(new Set())
+  const [initialPhotos, setInitialPhotos] = useState<Photo[]>([])
+// Hook de reordenamiento
+  const { photos: sortedPhotos, setPhotos, reorderPhotos, isSaving } = usePhotoReorder(
+    initialPhotos,
+    slug,
+    () => console.log('✅ Photo order saved')
+  )
+
+  // Sensores para drag & drop
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
   const getAuthHeaders = useCallback(() => {
     const token = localStorage.getItem('auth-token')
     return {
@@ -121,7 +368,12 @@ export default function AdminCollectionPage() {
 
       const data = await response.json()
       setCollection(data.collection)
-      setPhotos(data.photos || [])
+// Ordenar fotos por orderIndex
+const sortedPhotos = (data.photos || []).sort((a: Photo, b: Photo) => 
+  (a.orderIndex || 0) - (b.orderIndex || 0)
+)
+setInitialPhotos(sortedPhotos)
+setPhotos(sortedPhotos)
 
     } catch (err) {
       console.error('Error fetching collection:', err)
@@ -131,9 +383,102 @@ export default function AdminCollectionPage() {
     }
   }, [slug, router, getAuthHeaders])
 
-  useEffect(() => {
+useEffect(() => {
     fetchCollection()
   }, [fetchCollection])
+useEffect(() => {
+    if (!selectedPhoto) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') {
+        navigatePhoto(-1)
+      } else if (e.key === 'ArrowRight') {
+        navigatePhoto(1)
+      } else if (e.key === 'Escape') {
+        closePhotoViewer()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+}, [selectedPhoto, currentPhotoIndex, sortedPhotos])
+
+
+  const closePhotoViewer = () => {
+    setSelectedPhoto(null)
+  }
+
+const navigatePhoto = (direction: number) => {
+  const newIndex = (currentPhotoIndex + direction + sortedPhotos.length) % sortedPhotos.length
+  setCurrentPhotoIndex(newIndex)
+  setSelectedPhoto(sortedPhotos[newIndex])
+}
+
+const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string)
+  }
+const handleDragEnd = (event: DragEndEvent) => {
+  const { active, over } = event
+  setActiveId(null)
+
+  if (!over || active.id === over.id) {
+    return
+  }
+
+  // Si hay múltiples fotos seleccionadas y arrastramos una de ellas
+  if (selectedForReorder.size > 0 && selectedForReorder.has(active.id as string)) {
+    // Mover todo el grupo
+// Mantener el orden original de las fotos seleccionadas
+const selectedIds = sortedPhotos
+  .filter(p => selectedForReorder.has(p.id))
+  .map(p => p.id)
+    
+    // Remover las fotos seleccionadas de sus posiciones actuales
+const newPhotos = sortedPhotos.filter(p => !selectedForReorder.has(p.id))
+    
+    // Insertar el grupo en la nueva posición
+const selectedPhotos = selectedIds.map(id => sortedPhotos.find(p => p.id === id)!).filter(Boolean)
+const overIndex = sortedPhotos.findIndex(p => p.id === over.id)
+const activeIndex = sortedPhotos.findIndex(p => p.id === active.id)
+
+// Determinar si insertamos antes o después
+const insertIndex = newPhotos.findIndex(p => p.id === over.id)
+const insertAfter = overIndex > activeIndex
+
+if (insertAfter) {
+  newPhotos.splice(insertIndex + 1, 0, ...selectedPhotos)
+} else {
+  newPhotos.splice(insertIndex, 0, ...selectedPhotos)
+}
+    
+    // Actualizar orderIndex
+    const updatedPhotos = newPhotos.map((photo, index) => ({
+      ...photo,
+      orderIndex: index
+    }))
+    
+    setPhotos(updatedPhotos)
+    
+    // Guardar en servidor
+    const token = localStorage.getItem('auth-token')
+    fetch(`/api/collections/${slug}/reorder`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        photoOrders: updatedPhotos.map(photo => ({
+          id: photo.id,
+          orderIndex: photo.orderIndex
+        }))
+      })
+    }).catch(console.error)
+  } else {
+    // Mover una sola foto
+    reorderPhotos(active.id as string, over.id as string)
+  }
+}
 
   const toggleFavorite = (photoId: string) => {
     const newFavorites = new Set(favorites)
@@ -143,6 +488,18 @@ export default function AdminCollectionPage() {
       newFavorites.add(photoId)
     }
     setFavorites(newFavorites)
+  }
+
+const togglePhotoSelection = (photoId: string) => {
+    if (!isReorderMode) return
+    
+    const newSelection = new Set(selectedForReorder)
+    if (newSelection.has(photoId)) {
+      newSelection.delete(photoId)
+    } else {
+      newSelection.add(photoId)
+    }
+    setSelectedForReorder(newSelection)
   }
 
   if (!authChecked && loading) {
@@ -193,7 +550,288 @@ export default function AdminCollectionPage() {
     )
   }
 
-  const design = collection.design || {
+const handleSetAsCover = async (photoId: string) => {
+  if (!confirm('Set this photo as collection cover?')) return
+
+  try {
+    // ✅ CORRECCIÓN: usar el endpoint /cover con photoId (no coverPhotoId)
+    const response = await fetch(`/api/collections/${slug}/cover`, {
+      method: 'POST', // También acepta PUT
+      headers: getAuthHeaders(),
+      credentials: 'include',
+      body: JSON.stringify({ photoId }) // ⚠️ El endpoint espera "photoId"
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.error || 'Failed to set cover photo')
+    }
+
+    const data = await response.json()
+
+    // Actualizar estado local con la respuesta del servidor
+    if (data.coverPhoto && collection) {
+      setCollection({
+        ...collection,
+        coverPhoto: data.coverPhoto
+      })
+    }
+
+    alert('✅ Cover photo updated successfully!')
+  } catch (error) {
+    console.error('Error setting cover:', error)
+    alert(`❌ Failed to set cover photo: ${error instanceof Error ? error.message : 'Unknown error'}`)
+  }
+}
+
+const handleDeletePhoto = async (photoId: string, photoName: string) => {
+  if (!confirm(`⚠️ Delete "${photoName}"?\n\nThis action cannot be undone.`)) return
+
+  try {
+    const response = await fetch(`/api/collections/${slug}/photos/${photoId}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+      credentials: 'include'
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.error || 'Failed to delete photo')
+    }
+
+    const data = await response.json()
+
+    // Remover foto del estado local
+    setPhotos(prev => prev.filter(p => p.id !== photoId))
+
+    // Si era la cover photo, actualizar la colección
+    if (collection?.coverPhoto?.id === photoId) {
+      // El servidor automáticamente asigna otra foto o null
+      // Podrías hacer un refetch aquí si quieres la nueva cover
+      setCollection(prev => prev ? { ...prev, coverPhoto: undefined } : null)
+    }
+
+    alert('✅ Photo deleted successfully!')
+  } catch (error) {
+    console.error('Error deleting photo:', error)
+    alert(`❌ Failed to delete photo: ${error instanceof Error ? error.message : 'Unknown error'}`)
+  }
+}
+const handleDeleteSelected = async () => {
+  if (selectedForReorder.size === 0) return
+
+  const count = selectedForReorder.size
+  if (!confirm(`⚠️ Delete ${count} selected photo(s)?\n\nThis action cannot be undone.`)) return
+
+  try {
+    const token = localStorage.getItem('auth-token')
+    const errors: string[] = []
+    let successCount = 0
+
+    // Eliminar cada foto
+    for (const photoId of Array.from(selectedForReorder)) {
+      try {
+        const response = await fetch(`/api/collections/${slug}/photos/${photoId}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include'
+        })
+
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || 'Failed to delete')
+        }
+
+        successCount++
+      } catch (error) {
+        const photo = sortedPhotos.find(p => p.id === photoId)
+        errors.push(`${photo?.originalFilename || photoId}: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }
+    }
+
+    // Actualizar estado local
+    setPhotos(prev => prev.filter(p => !selectedForReorder.has(p.id)))
+    setSelectedForReorder(new Set())
+
+    // Si alguna era cover photo, limpiar
+    if (collection?.coverPhoto && selectedForReorder.has(collection.coverPhoto.id)) {
+      setCollection(prev => prev ? { ...prev, coverPhoto: undefined } : null)
+    }
+
+    // Mostrar resultado
+    if (errors.length === 0) {
+      alert(`✅ Successfully deleted ${successCount} photo(s)!`)
+    } else {
+      alert(`⚠️ Deleted ${successCount} photo(s).\n\nErrors (${errors.length}):\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? `\n...and ${errors.length - 5} more` : ''}`)
+    }
+  } catch (error) {
+    console.error('Error deleting photos:', error)
+    alert(`❌ Failed to delete photos: ${error instanceof Error ? error.message : 'Unknown error'}`)
+  }
+}
+
+const handleDragEnter = (e: React.DragEvent) => {
+  e.preventDefault()
+  e.stopPropagation()
+  
+  // Solo activar si se arrastran archivos desde fuera
+  if (e.dataTransfer.types && e.dataTransfer.types.includes('Files')) {
+    setIsDragging(true)
+  }
+}
+
+const handleDragLeave = (e: React.DragEvent) => {
+  e.preventDefault()
+  e.stopPropagation()
+  
+  // Solo ocultar si salimos del documento completamente
+  if (e.currentTarget === e.target) {
+    setIsDragging(false)
+  }
+}
+
+const handleDragOver = (e: React.DragEvent) => {
+  e.preventDefault()
+  e.stopPropagation()
+}
+
+const handleDrop = async (e: React.DragEvent) => {
+  e.preventDefault()
+  e.stopPropagation()
+  setIsDragging(false)
+
+  // Ignorar si no hay archivos (drag de elementos HTML internos)
+  if (!e.dataTransfer.files || e.dataTransfer.files.length === 0) {
+    return
+  }
+
+  const files = Array.from(e.dataTransfer.files)
+  
+  // Filtrar solo imágenes
+  const imageFiles = files.filter(file => {
+    const validTypes = ['image/jpeg', 'image/png', 'image/tiff', 'image/webp']
+    const validExtensions = ['.jpg', '.jpeg', '.png', '.tiff', '.webp', '.cr2', '.crw', '.nef', '.arw', '.dng', '.raw', '.rw2', '.orf', '.raf']
+    const extension = file.name.toLowerCase().match(/\.[^.]+$/)?.[0] || ''
+    
+    return validTypes.includes(file.type) || validExtensions.includes(extension)
+  })
+
+  if (imageFiles.length === 0) {
+    alert('❌ No valid image files found. Please drop JPG, PNG, TIFF, or RAW files.')
+    return
+  }
+
+  if (imageFiles.length !== files.length) {
+    alert(`⚠️ ${files.length - imageFiles.length} file(s) were skipped (not images)`)
+  }
+
+  await uploadFiles(imageFiles)
+}
+
+const uploadFiles = async (files: File[]) => {
+  if (!collection) return
+
+  setUploading(true)
+  setUploadProgress({ current: 0, total: files.length })
+
+  const uploadedPhotos: Photo[] = []
+  const errors: string[] = []
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i]
+    setUploadProgress({ current: i + 1, total: files.length })
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('collectionId', collection.id)
+
+const token = localStorage.getItem('auth-token')
+const response = await fetch('/api/photos/upload', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${token}`
+  },
+  credentials: 'include',
+  body: formData
+})
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Upload failed')
+      }
+
+      const photo = await response.json()
+      uploadedPhotos.push(photo)
+
+    } catch (error) {
+      console.error(`Error uploading ${file.name}:`, error)
+      errors.push(`${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+
+  // Actualizar la lista de fotos
+  if (uploadedPhotos.length > 0) {
+    setPhotos(prev => [...uploadedPhotos, ...prev])
+    
+    // Si la primera foto subida se convirtió en cover, actualizar
+    if (!collection.coverPhoto && uploadedPhotos[0]) {
+      setCollection(prev => prev ? {
+        ...prev,
+        coverPhoto: {
+          id: uploadedPhotos[0].id,
+          thumbnailUrl: uploadedPhotos[0].thumbnailUrl,
+          webUrl: uploadedPhotos[0].webUrl
+        }
+      } : null)
+    }
+  }
+
+  setUploading(false)
+  setUploadProgress({ current: 0, total: 0 })
+
+  // Mostrar resumen
+  if (errors.length === 0) {
+    alert(`✅ Successfully uploaded ${uploadedPhotos.length} photo(s)!`)
+  } else {
+    alert(`⚠️ Uploaded ${uploadedPhotos.length} photo(s).\n\nErrors:\n${errors.join('\n')}`)
+  }
+}
+
+const handleDownloadPhoto = async (photoUrl: string, filename: string) => {
+  try {
+    // Fetch la imagen como blob
+    const response = await fetch(photoUrl)
+    if (!response.ok) throw new Error('Failed to fetch image')
+    
+    const blob = await response.blob()
+    
+    // Crear un link temporal para descargar
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename // Forzar descarga con el nombre original
+    document.body.appendChild(link)
+    link.click()
+    
+    // Limpiar
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    
+  } catch (error) {
+    console.error('Error downloading photo:', error)
+    alert('❌ Failed to download photo')
+  }
+}
+const handlePhotoClick = (photo: Photo, index: number) => {
+  setSelectedPhoto(photo)
+  setCurrentPhotoIndex(index)
+}
+
+  const design = collection?.design || {
     coverLayout: 'center',
     typography: {
       titleFont: 'Inter',
@@ -214,9 +852,60 @@ export default function AdminCollectionPage() {
     }
   }
 
-  return (
-    <AppLayout>
-      <div className="min-h-screen flex flex-col">
+return (
+  <AppLayout>
+    <div 
+      className="min-h-screen flex flex-col relative"
+    >
+{/* Indicador de guardado */}
+        {isSaving && (
+          <div className="fixed top-4 right-4 z-50 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 animate-pulse">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="text-sm">Saving order...</span>
+          </div>
+        )}
+
+{/* Drag & Drop Overlay */}
+{isDragging && (
+  <div className="fixed inset-0 z-50 bg-blue-500/20 backdrop-blur-sm flex items-center justify-center pointer-events-none">
+    <div className="bg-white rounded-2xl shadow-2xl p-8 border-4 border-dashed border-blue-500">
+      <Upload className="h-16 w-16 mx-auto mb-4 text-blue-500" />
+      <p className="text-2xl font-bold text-gray-900 text-center mb-2">
+        Drop photos here
+      </p>
+      <p className="text-sm text-gray-600 text-center">
+        Upload to {collection?.title}
+      </p>
+    </div>
+  </div>
+)}
+
+{/* Upload Progress Overlay */}
+{uploading && (
+  <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center">
+    <div className="bg-white rounded-xl shadow-2xl p-6 w-96 max-w-[90vw]">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        <div>
+          <p className="font-semibold text-gray-900">Uploading photos...</p>
+          <p className="text-sm text-gray-600">
+            {uploadProgress.current} of {uploadProgress.total}
+</p>
+        </div>
+      </div>
+
+<div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+        <div 
+          className="bg-blue-500 h-2 transition-all duration-300"
+          style={{ 
+            width: `${(uploadProgress.current / uploadProgress.total) * 100}%` 
+          }}
+        />
+ </div>
+    </div>
+  </div>
+)}
+
         {/* Portada */}
         <section 
           className="h-96 flex items-center justify-center relative overflow-hidden"
@@ -265,22 +954,7 @@ export default function AdminCollectionPage() {
                 RENE RIVAROLA PHOTOGRAPHY
               </p>
             </div>
-
-            <div className="flex gap-4 justify-center">
-              <Link href={`/admin/collections/${slug}/design`}>
-                <Button variant="outline" className="bg-white/20 border-white/30 text-white hover:bg-white/30">
-                  <Settings className="h-4 w-4 mr-2" />
-                  Design
-                </Button>
-              </Link>
-              <Link href={`/admin/collections/${slug}`}>
-                <Button variant="outline" className="bg-white/20 border-white/30 text-white hover:bg-white/30">
-                  <Edit className="h-4 w-4 mr-2" />
-                  Manage
-                </Button>
-              </Link>
-            </div>
-          </div>
+ </div>
         </section>
 
         {/* Header Admin */}
@@ -288,66 +962,127 @@ export default function AdminCollectionPage() {
           <div className="flex items-center justify-between max-w-7xl mx-auto">
             <div>
               <h2 className="text-xl font-bold">{collection.title}</h2>
-              <p className="text-sm text-muted-foreground">{photos.length} photos</p>
+<p className="text-sm text-muted-foreground">{sortedPhotos.length} photos</p>
             </div>
-            <div className="flex items-center gap-2">
+<div className="flex items-center gap-2">
+              {/* Botón Delete Selected (visible solo cuando hay selección) */}
+              {selectedForReorder.size > 0 && (
+                <Button
+                  variant="destructive"
+                  className="gap-2"
+                  onClick={handleDeleteSelected}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete ({selectedForReorder.size})
+                </Button>
+              )}
+
+              <Link href={`/upload?collection=${collection?.id}`}>
+                <Button variant="outline" className="gap-2">
+                  <Upload className="h-4 w-4" />
+                  Upload
+                </Button>
+              </Link>
               <Link href={`/admin/collections/${slug}/design`}>
                 <Button variant="outline" className="gap-2">
                   <Settings className="h-4 w-4" />
                   Design
                 </Button>
               </Link>
+              <Button
+                variant={isReorderMode ? "default" : "outline"}
+                className={isReorderMode ? "gap-2 bg-blue-500 hover:bg-blue-600" : "gap-2"}
+                onClick={() => {
+                  setIsReorderMode(!isReorderMode)
+                  if (isReorderMode) {
+                    setSelectedForReorder(new Set())
+                  }
+                }}
+              >
+                <Edit className="h-4 w-4" />
+                {isReorderMode ? 'Exit Reorder' : 'Reorder'}
+              </Button>
             </div>
           </div>
         </div>
 
         {/* Grilla Admin */}
-        <div className="flex-1 overflow-auto p-6">
+<div 
+  className="flex-1 overflow-auto p-6 relative"
+onDragEnter={handleDragEnter}
+  onDragOver={handleDragOver}
+  onDragLeave={handleDragLeave}
+  onDrop={handleDrop}
+>
+{/* Drag & Drop Overlay */}
+  {isDragging && (
+    <div className="absolute inset-0 z-50 bg-blue-500/20 backdrop-blur-sm flex items-center justify-center pointer-events-none">
+      <div className="bg-white rounded-2xl shadow-2xl p-8 border-4 border-dashed border-blue-500">
+        <Upload className="h-16 w-16 mx-auto mb-4 text-blue-500" />
+        <p className="text-2xl font-bold text-gray-900 text-center mb-2">
+          Drop photos here
+        </p>
+        <p className="text-sm text-gray-600 text-center">
+          Upload to {collection?.title}
+        </p>
+      </div>
+    </div>
+  )}
           <div className="max-w-7xl mx-auto">
-            {photos.length > 0 ? (
-              <div className="grid w-full" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(200px, 1fr))`, gap: '16px' }}>
-                {photos.map((photo) => {
-                  const isFavorite = favorites.has(photo.id)
-                  
-                  return (
-                    <Card key={photo.id} className="overflow-hidden hover:shadow-lg transition-all">
-                      <div className="relative aspect-square bg-muted overflow-hidden group">
-                        <img 
-                          src={photo.thumbnailUrl} 
-                          alt={photo.originalFilename} 
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
-                        />
-                        
-                        {isFavorite && (
-                          <div className="absolute top-3 left-3 z-10">
-                            <Heart className="h-5 w-5 fill-red-500 text-red-500" />
-                          </div>
-                        )}
 
-                        <div className="absolute bottom-3 left-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className={`h-8 w-8 p-0 ${
-                              isFavorite 
-                                ? 'bg-red-500 text-white' 
-                                : 'bg-white/90'
-                            }`}
-                            onClick={() => toggleFavorite(photo.id)}
-                          >
-                            <Heart className={`h-3.5 w-3.5 ${isFavorite ? 'fill-current' : ''}`} />
-                          </Button>
-                        </div>
-                      </div>
-                      <CardContent className="pt-3">
-                        <p className="text-xs text-muted-foreground truncate">
-                          {photo.originalFilename}
-                        </p>
-                      </CardContent>
-                    </Card>
-                  )
-                })}
-              </div>
+{sortedPhotos.length > 0 ? (
+  <DndContext
+    sensors={sensors}
+    collisionDetection={closestCenter}
+    onDragStart={handleDragStart}
+    onDragEnd={handleDragEnd}
+  >
+    <SortableContext
+      items={sortedPhotos.map(p => p.id)}
+      strategy={rectSortingStrategy}
+    >
+      <div className="grid w-full" style={{
+        gridTemplateColumns: `repeat(auto-fill, minmax(250px, 1fr))`,
+        gap: '16px',
+        alignItems: 'start'
+      }}>
+        {sortedPhotos.map((photo, index) => (
+<SortablePhotoCard
+  key={photo.id}
+  photo={photo}
+  isCover={collection.coverPhoto?.id === photo.id}
+  isFavorite={favorites.has(photo.id)}
+  isReorderMode={isReorderMode}
+  isSelected={selectedForReorder.has(photo.id)}
+  onPhotoClick={() => handlePhotoClick(photo, index)}
+  onToggleSelection={() => togglePhotoSelection(photo.id)}
+  onSetCover={() => handleSetAsCover(photo.id)}
+  onToggleFavorite={() => toggleFavorite(photo.id)}
+  onDownload={() => handleDownloadPhoto(photo.originalUrl, photo.originalFilename)}
+  onDelete={() => handleDeletePhoto(photo.id, photo.originalFilename)}
+  openMenuId={openMenuId}
+  setOpenMenuId={setOpenMenuId}
+/>
+        ))}
+      </div>
+    </SortableContext>
+
+    <DragOverlay>
+      {activeId ? (
+        <div className="opacity-70 rotate-3">
+          <Card className="overflow-hidden shadow-2xl">
+            <div className="aspect-square bg-muted">
+              <img
+                src={sortedPhotos.find(p => p.id === activeId)?.thumbnailUrl}
+                alt="Dragging"
+                className="w-full h-full object-cover"
+              />
+            </div>
+          </Card>
+        </div>
+      ) : null}
+    </DragOverlay>
+  </DndContext>
             ) : (
               <div className="text-center py-16">
                 <Camera className="h-16 w-16 mx-auto mb-4 opacity-50 text-muted-foreground" />
@@ -357,6 +1092,111 @@ export default function AdminCollectionPage() {
           </div>
         </div>
       </div>
+      {/* Lightbox */}
+      {selectedPhoto && (
+<div className="fixed inset-0 bg-black z-50 flex items-center justify-center">
+          {/* Header */}
+          <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/80 to-transparent p-4 z-10">
+            <div className="flex items-center justify-between max-w-7xl mx-auto">
+              <div className="text-white">
+                <p className="text-sm font-medium">{selectedPhoto.originalFilename}</p>
+                <p className="text-xs text-white/60">
+{currentPhotoIndex + 1} of {sortedPhotos.length}
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={closePhotoViewer}
+                className="text-white hover:bg-white/20"
+              >
+                <X className="h-6 w-6" />
+              </Button>
+            </div>
+          </div>
+
+{sortedPhotos.length > 1 && (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  navigatePhoto(-1)
+                }}
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:bg-white/20 h-12 w-12 z-10"
+              >
+                <ChevronLeft className="h-8 w-8" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  navigatePhoto(1)
+                }}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:bg-white/20 h-12 w-12 z-10"
+              >
+                <ChevronRight className="h-8 w-8" />
+              </Button>
+            </>
+          )}
+
+          <div 
+            className="relative w-full h-full flex items-center justify-center p-8"
+            onClick={closePhotoViewer}
+          >
+            <img
+              src={selectedPhoto.highResUrl || selectedPhoto.webUrl}
+              alt={selectedPhoto.originalFilename}
+              className="max-w-full max-h-full object-contain"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+
+          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 z-10">
+            <div className="flex items-center justify-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleDownloadPhoto(selectedPhoto.originalUrl, selectedPhoto.originalFilename)
+                }}
+                className="bg-white/10 border-white/20 text-white hover:bg-white/20"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleSetAsCover(selectedPhoto.id)
+                }}
+                className="bg-white/10 border-white/20 text-white hover:bg-white/20"
+              >
+                <ImageIcon className="h-4 w-4 mr-2" />
+                Set as Cover
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  closePhotoViewer()
+                  handleDeletePhoto(selectedPhoto.id, selectedPhoto.originalFilename)
+                }}
+                className="bg-red-500/80 border-red-500/50 text-white hover:bg-red-500"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   )
 }

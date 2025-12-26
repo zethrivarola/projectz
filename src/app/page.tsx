@@ -103,13 +103,6 @@ export default function HomePage() {
               </div>
             </Link>
             
-            {/* Admin Login - Hidden on mobile */}
-            <Link 
-              href="/login"
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors hidden sm:block"
-            >
-              Admin
-            </Link>
           </div>
         </div>
       </header>

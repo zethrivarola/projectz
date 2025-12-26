@@ -95,13 +95,20 @@ const response = NextResponse.json({
   }
 })
 
+// Detectar si es acceso local (IP) o público (dominio)
+    const host = request.headers.get('host') || ''
+    const isLocalAccess = host.startsWith('192.168.') || host.startsWith('localhost')
+    
     // Setear cookie httpOnly
     response.cookies.set('auth-token', tokens.accessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: !isLocalAccess, // false para IP local, true para dominio público
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 7 // 7 días
+      maxAge: 60 * 60 * 24 * 7, // 7 días
+      path: '/'
     })
+    
+    console.log(`🍪 Cookie set - Host: ${host}, Local: ${isLocalAccess}, Secure: ${!isLocalAccess}`)
 
     return response
 

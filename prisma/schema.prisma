@@ -98,6 +98,7 @@ model Collection {
   customAccentColor         String?              @map("custom_accent_color")
   createdAt                 DateTime             @default(now()) @map("created_at")
   updatedAt                 DateTime             @updatedAt @map("updated_at")
+lastModified      DateTime?            @default(now()) @map("last_modified")
   contacts                  CollectionContact[]
   collectionShares          CollectionShare[]
   coverPhoto                Photo?               @relation("CollectionCoverPhoto", fields: [coverPhotoId], references: [id])
@@ -492,6 +493,33 @@ model PhotoSelection {
   @@map("photo_selections")
 }
 
+model DownloadJob {
+  id           String            @id @default(uuid())
+  collectionId String            @map("collection_id")
+  userId       String?           @map("user_id")
+  format       DownloadFormat    @default(original)
+  photoIds     String[]          @map("photo_ids")
+  status       DownloadJobStatus @default(pending)
+  progress     Int               @default(0) // 0-100
+  totalPhotos  Int               @default(0) @map("total_photos")
+  totalSize    BigInt?           @map("total_size") // bytes
+  zipPath      String?           @map("zip_path") // ruta del ZIP generado
+  zipUrl       String?           @map("zip_url") // URL temporal de descarga
+  error        String?
+  expiresAt    DateTime?         @map("expires_at") // Cuando expira el ZIP
+notificationEmail  String?           @map("notification_email")
+  emailSent          Boolean           @default(false) @map("email_sent")
+  createdAt    DateTime          @default(now()) @map("created_at")
+  updatedAt    DateTime          @updatedAt @map("updated_at")
+  completedAt  DateTime?         @map("completed_at")
+
+  @@index([collectionId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("download_jobs")
+}
+
+
 enum UserRole {
   SUPER_ADMIN    // Tú - acceso total
   PHOTOGRAPHER   // Fotógrafos - solo sus colecciones
@@ -551,4 +579,17 @@ enum PhotoSelectionStatus {
   approved
   rejected
   maybe
+}
+
+enum DownloadFormat {
+  web
+  original
+}
+
+enum DownloadJobStatus {
+  pending
+  processing
+  completed
+  failed
+  expired
 }

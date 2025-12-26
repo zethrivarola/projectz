@@ -1,0 +1,295 @@
+// Reemplazar: /src/lib/download-worker.ts
+import { Job } from 'bull';
+import { prisma } from '@/lib/prisma';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import path from 'path';
+import fs from 'fs/promises';
+import { sendDownloadReadyEmail } from './email/resend';
+
+const execAsync = promisify(exec);
+
+interface DownloadJobData {
+  jobId: string;
+  collectionId: string;
+  collectionTitle: string;
+  format: 'original' | 'web';
+  notificationEmail?: string;
+}
+
+interface PhotoFile {
+  path: string;
+  size: number;
+}
+
+const CHUNK_SIZE_BYTES = 7 * 1024 * 1024 * 1024;
+const UPLOAD_DIR = process.env.UPLOAD_DIR || '/media/storage/rene-rivarola/uploads';
+const TEMP_DOWNLOAD_DIR = path.join(UPLOAD_DIR, 'temp-downloads');
+
+export async function processDownloadJob(job: Job<DownloadJobData>) {
+  const { jobId, collectionId, collectionTitle, format, notificationEmail } = job.data;
+
+  console.log(`[Worker] Processing download job ${jobId} for collection ${collectionId}`);
+  if (notificationEmail) {
+    console.log(`[Worker] Will notify: ${notificationEmail}`);
+  }
+
+  try {
+    await prisma.downloadJob.update({
+      where: { id: jobId },
+      data: { status: 'processing', progress: 0 }
+    });
+
+    const collection = await prisma.collection.findUnique({
+      where: { id: collectionId },
+      include: {
+        photos: true,
+        owner: {
+          select: {
+            email: true
+          }
+        }
+      }
+    });
+
+    if (!collection) {
+      throw new Error('Collection not found');
+    }
+
+    console.log(`[Worker] Found ${collection.photos.length} photos`);
+
+    const photoFiles: PhotoFile[] = [];
+
+    for (const photo of collection.photos) {
+      const url = format === 'original' ? photo.originalUrl : photo.webUrl;
+
+      if (!url) {
+        console.warn(`[Worker] Photo ${photo.id} missing ${format} URL`);
+        continue;
+      }
+
+      const relativePath = url.replace('/api/uploads/', '');
+      const filePath = path.join(UPLOAD_DIR, relativePath);
+
+      try {
+        const stats = await fs.stat(filePath);
+        photoFiles.push({
+          path: filePath,
+          size: stats.size
+        });
+      } catch (error) {
+        console.warn(`[Worker] File not found: ${filePath}`);
+      }
+    }
+
+    if (photoFiles.length === 0) {
+      throw new Error('No files found to compress');
+    }
+
+    console.log(`[Worker] Total files: ${photoFiles.length}, Total size: ${formatBytes(photoFiles.reduce((sum, f) => sum + f.size, 0))}`);
+
+    const chunks = createChunks(photoFiles, CHUNK_SIZE_BYTES);
+    console.log(`[Worker] Split into ${chunks.length} parts`);
+
+    await fs.mkdir(TEMP_DOWNLOAD_DIR, { recursive: true });
+
+    const timestamp = Date.now();
+    const baseName = `${collection.slug}-${format}-${timestamp}`;
+
+    const zipUrls: string[] = [];
+
+    for (let i = 0; i < chunks.length; i++) {
+      const partNum = i + 1;
+      const zipFileName = `${baseName}-part${partNum}.zip`;
+      const zipFilePath = path.join(TEMP_DOWNLOAD_DIR, zipFileName);
+
+      console.log(`[Worker] Creating part ${partNum}/${chunks.length}: ${zipFileName}`);
+
+      const fileListPath = path.join(TEMP_DOWNLOAD_DIR, `${baseName}-part${partNum}.txt`);
+      const fileList = chunks[i].map(f => f.path).join('\n');
+      await fs.writeFile(fileListPath, fileList);
+
+      const zipCommand = `cat "${fileListPath}" | zip -q -9 -j -@ "${zipFilePath}"`;
+
+      try {
+        await execAsync(zipCommand, {
+          maxBuffer: 1024 * 1024 * 100,
+        });
+
+        const zipStats = await fs.stat(zipFilePath);
+        console.log(`[Worker] Part ${partNum} created: ${formatBytes(zipStats.size)}`);
+
+        zipUrls.push(`/api/downloads/file/${zipFileName}`);
+
+        await fs.unlink(fileListPath);
+
+      } catch (error) {
+        console.error(`[Worker] Error creating part ${partNum}:`, error);
+        await fs.unlink(fileListPath).catch(() => {});
+        throw error;
+      }
+
+      const progress = Math.round(((partNum) / chunks.length) * 100);
+      await prisma.downloadJob.update({
+        where: { id: jobId },
+        data: { progress }
+      });
+
+      await job.progress(progress);
+    }
+
+    // Calcular expiración: 48 horas desde ahora
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 48);
+    
+    await prisma.downloadJob.update({
+      where: { id: jobId },
+      data: {
+        status: 'completed',
+        progress: 100,
+        zipUrl: zipUrls.join(','),
+        completedAt: new Date(),
+        expiresAt: expiresAt
+      }
+    });
+
+    console.log(`[Worker] Job ${jobId} completed. Generated ${chunks.length} ZIPs`);
+
+    // Determinar a quién enviar el email
+    const recipientEmail = notificationEmail || collection.owner?.email;
+
+    if (recipientEmail) {
+      console.log(`[Worker] Sending email to ${recipientEmail}${notificationEmail ? ' (custom)' : ' (owner)'}`);
+
+      try {
+        const emailResult = await sendDownloadReadyEmail({
+          to: recipientEmail,
+          collectionTitle: collectionTitle || collection.title,
+          totalPhotos: photoFiles.length,
+          downloadToken: jobId,
+          expiresAt: expiresAt,
+          urls: zipUrls
+        });
+
+        if (emailResult.success) {
+          await prisma.downloadJob.update({
+            where: { id: jobId },
+            data: { emailSent: true }
+          });
+          console.log(`[Worker] ✅ Email sent successfully to ${recipientEmail}`);
+        } else {
+          console.error(`[Worker] ❌ Email failed:`, emailResult.error);
+        }
+      } catch (emailError) {
+        console.error(`[Worker] ❌ Email exception:`, emailError);
+      }
+    } else {
+      console.log(`[Worker] ⚠️ No email to send notification (no notificationEmail and owner has no email)`);
+    }
+
+    // Programar limpieza
+    setTimeout(() => {
+      cleanupOldFiles(baseName);
+    }, 48 * 60 * 60 * 1000);
+
+    return { success: true, parts: chunks.length };
+
+  } catch (error) {
+    console.error(`[Worker] Job ${jobId} failed:`, error);
+
+    await prisma.downloadJob.update({
+      where: { id: jobId },
+      data: {
+        status: 'failed',
+error: error instanceof Error ? error.message : 'Unknown error',
+
+completedAt: new Date()
+      }
+    });
+
+    throw error;
+  }
+}
+
+function createChunks(files: PhotoFile[], maxChunkSize: number): PhotoFile[][] {
+  const chunks: PhotoFile[][] = [];
+  let currentChunk: PhotoFile[] = [];
+  let currentSize = 0;
+
+  for (const file of files) {
+    if (currentSize + file.size > maxChunkSize && currentChunk.length > 0) {
+      chunks.push(currentChunk);
+      currentChunk = [];
+      currentSize = 0;
+    }
+
+    currentChunk.push(file);
+    currentSize += file.size;
+  }
+
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk);
+  }
+
+  return chunks;
+}
+
+async function cleanupOldFiles(baseName: string) {
+  try {
+    const files = await fs.readdir(TEMP_DOWNLOAD_DIR);
+
+    for (const file of files) {
+      if (file.startsWith(baseName)) {
+        const filePath = path.join(TEMP_DOWNLOAD_DIR, file);
+        await fs.unlink(filePath);
+        console.log(`[Cleanup] Deleted: ${file}`);
+      }
+    }
+  } catch (error) {
+    console.error('[Cleanup] Error:', error);
+  }
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
+
+export async function markExpiredDownloads() {
+  try {
+    const now = new Date();
+
+    const expiredJobs = await prisma.downloadJob.updateMany({
+      where: {
+        status: 'completed',
+        expiresAt: {
+          lt: now
+        }
+      },
+      data: {
+        status: 'expired'
+      }
+    });
+
+    console.log(`[Cleanup] Marked ${expiredJobs.count} downloads as expired`);
+    return expiredJobs.count;
+  } catch (error) {
+    console.error('[Cleanup] Error marking expired downloads:', error);
+    return 0;
+  }
+}
+
+import { downloadQueue } from './download-queue';
+
+downloadQueue.process(async (job) => {
+  return await processDownloadJob(job);
+});
+
+export function startCleanupWorker() {
+  console.log('✅ Cleanup worker initialized');
+}
+
+console.log('✅ Download worker registered');

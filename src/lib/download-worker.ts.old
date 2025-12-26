@@ -1,0 +1,244 @@
+// 🔧 REEMPLAZAR: /src/lib/download-worker.ts
+
+import { downloadQueue, DownloadJobData } from './download-queue'
+import { prisma } from './prisma'
+import * as fs from 'fs'
+import * as path from 'path'
+import { Job } from 'bull'
+import { exec } from 'child_process'
+import { promisify } from 'util'
+
+const execAsync = promisify(exec)
+
+const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads'
+const TEMP_DIR = path.join(UPLOAD_DIR, 'temp-downloads')
+const VOLUME_SIZE = '5g' // 5GB por volumen
+
+if (!fs.existsSync(TEMP_DIR)) {
+  fs.mkdirSync(TEMP_DIR, { recursive: true })
+}
+
+downloadQueue.process(async (job: Job<DownloadJobData>) => {
+  const { jobId, collectionId, collectionSlug, collectionTitle, format, photoIds } = job.data
+
+  console.log(`📦 Processing download job ${jobId}`)
+
+  try {
+    await prisma.downloadJob.update({
+      where: { id: jobId },
+      data: { status: 'processing', progress: 0 },
+    })
+
+    // Obtener fotos
+    const photos = await prisma.photo.findMany({
+      where: {
+        collectionId,
+        ...(photoIds ? { id: { in: photoIds } } : {}),
+        processingStatus: 'completed',
+      },
+      orderBy: { orderIndex: 'asc' },
+      select: {
+        id: true,
+        originalFilename: true,
+        webUrl: true,
+        originalUrl: true,
+        fileSize: true,
+      },
+    })
+
+    if (photos.length === 0) {
+      throw new Error('No photos found')
+    }
+
+    const totalPhotos = photos.length
+    await prisma.downloadJob.update({
+      where: { id: jobId },
+      data: { totalPhotos },
+    })
+
+    console.log(`✅ Found ${totalPhotos} photos to zip`)
+
+    // Crear directorio temporal para esta colección
+    const tempCollectionDir = path.join(TEMP_DIR, `temp-${jobId}`)
+    fs.mkdirSync(tempCollectionDir, { recursive: true })
+
+    // Copiar/symlink fotos al directorio temporal
+    let copiedCount = 0
+    for (const photo of photos) {
+      const url = format === 'original' ? photo.originalUrl : photo.webUrl
+      if (!url) continue
+
+      const filePath = url.replace('/api/uploads/', '')
+      const sourcePath = path.join(UPLOAD_DIR, filePath)
+
+      if (fs.existsSync(sourcePath)) {
+        const destPath = path.join(tempCollectionDir, photo.originalFilename)
+        
+        // Crear symlink (más rápido que copiar)
+        try {
+          fs.symlinkSync(sourcePath, destPath)
+        } catch {
+          // Si symlink falla, copiar
+          fs.copyFileSync(sourcePath, destPath)
+        }
+        
+        copiedCount++
+        
+        // Actualizar progreso (fase 1: preparación 0-20%)
+        const progress = Math.floor((copiedCount / totalPhotos) * 20)
+        await prisma.downloadJob.update({
+          where: { id: jobId },
+          data: { progress },
+        })
+        job.progress(progress)
+      }
+    }
+
+    // Crear README
+    const readme = `${collectionTitle}
+${'='.repeat(60)}
+
+Total Photos: ${copiedCount}
+Format: ${format === 'original' ? 'Original Quality' : 'Web Quality (1080p)'}
+
+${copiedCount > 100 ? 'Note: This archive was split into multiple volumes for easier download.\nTo extract, simply extract the first file (.zip.001) and all parts will be\nautomatically extracted together.\n\n' : ''}---
+© ${new Date().getFullYear()} René Rivarola Photography
+All rights reserved.
+`
+    fs.writeFileSync(path.join(tempCollectionDir, 'README.txt'), readme)
+
+    // Nombre base del ZIP
+    const zipBaseName = `${collectionSlug}-${format}-${Date.now()}`
+    const zipOutputPath = path.join(TEMP_DIR, zipBaseName)
+
+    console.log(`📦 Creating 7z archive with ${VOLUME_SIZE} volumes...`)
+
+    // Comando 7zip para crear multi-volume archive
+    // -v5g = volumes de 5GB
+    // -mx=5 = compresión media (balance velocidad/ratio)
+    const command = `7z a -tzip -v${VOLUME_SIZE} -mx=5 "${zipOutputPath}.zip" "${tempCollectionDir}"/*`
+
+    // Ejecutar 7zip con progreso
+    const process = exec(command)
+    
+    process.stdout?.on('data', (data) => {
+      // Parsear progreso de 7zip (fase 2: compresión 20-100%)
+      const match = data.toString().match(/(\d+)%/)
+      if (match) {
+        const compressionProgress = parseInt(match[1])
+        const totalProgress = 20 + Math.floor(compressionProgress * 0.8)
+        prisma.downloadJob.update({
+          where: { id: jobId },
+          data: { progress: totalProgress },
+        }).catch(console.error)
+        job.progress(totalProgress)
+      }
+    })
+
+    await new Promise((resolve, reject) => {
+      process.on('close', (code) => {
+        if (code === 0) resolve(true)
+        else reject(new Error(`7zip exited with code ${code}`))
+      })
+      process.on('error', reject)
+    })
+
+    console.log(`✅ 7z archive created`)
+
+    // Limpiar directorio temporal
+    fs.rmSync(tempCollectionDir, { recursive: true, force: true })
+
+    // Encontrar todos los volúmenes generados
+    const files = fs.readdirSync(TEMP_DIR)
+    const volumeFiles = files.filter(f => 
+      f.startsWith(zipBaseName) && (f.endsWith('.zip') || f.match(/\.zip\.\d+$/))
+    )
+
+    if (volumeFiles.length === 0) {
+      throw new Error('No volumes created')
+    }
+
+    console.log(`✅ Created ${volumeFiles.length} volume(s)`)
+
+    // Calcular tamaño total
+    let totalSize = BigInt(0)
+    for (const file of volumeFiles) {
+      const stats = fs.statSync(path.join(TEMP_DIR, file))
+      totalSize += BigInt(stats.size)
+    }
+
+    // Generar URLs
+    const zipUrls = volumeFiles.map(f => `/api/downloads/file/${f}`)
+    const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000) // 48h para multi-volume
+
+    // Actualizar job
+    await prisma.downloadJob.update({
+      where: { id: jobId },
+      data: {
+        status: 'completed',
+        progress: 100,
+        totalSize,
+        zipPath: volumeFiles.join(','),
+        zipUrl: zipUrls.join(','),
+        expiresAt,
+        completedAt: new Date(),
+      },
+    })
+
+    console.log(`✅ Download job ${jobId} completed: ${volumeFiles.length} volumes (${totalSize} bytes)`)
+
+    return { success: true, volumes: volumeFiles.length }
+
+  } catch (error) {
+    console.error(`❌ Download job ${jobId} failed:`, error)
+
+    await prisma.downloadJob.update({
+      where: { id: jobId },
+      data: {
+        status: 'failed',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      },
+    })
+
+    throw error
+  }
+})
+
+export async function startCleanupWorker() {
+  setInterval(async () => {
+    try {
+      console.log('🧹 Running ZIP cleanup...')
+
+      const expiredJobs = await prisma.downloadJob.findMany({
+        where: {
+          status: 'completed',
+          expiresAt: { lt: new Date() },
+        },
+      })
+
+      for (const job of expiredJobs) {
+        if (job.zipPath) {
+          const zipFiles = job.zipPath.split(',')
+          for (const zipFile of zipFiles) {
+            const fullPath = path.join(TEMP_DIR, path.basename(zipFile))
+            if (fs.existsSync(fullPath)) {
+              fs.unlinkSync(fullPath)
+              console.log(`  🗑️ Deleted: ${zipFile}`)
+            }
+          }
+        }
+
+        await prisma.downloadJob.update({
+          where: { id: job.id },
+          data: { status: 'expired', zipPath: null, zipUrl: null },
+        })
+      }
+
+      console.log(`✅ Cleanup completed: ${expiredJobs.length} jobs cleaned`)
+    } catch (error) {
+      console.error('❌ Cleanup error:', error)
+    }
+  }, 60 * 60 * 1000)
+}
+
+console.log('✅ Download worker with 7zip multi-volume support (5GB volumes)')

@@ -45,6 +45,7 @@ export async function GET(
             id: true,
             filename: true,
             originalFilename: true,
+            fileSize: true,          
             thumbnailUrl: true,
             webUrl: true,
             highResUrl: true,
@@ -123,9 +124,11 @@ export async function GET(
       coverFocus: collection.coverFocalPoint || { x: 50, y: 50 }
     }
   },
-  photos: collection.photos
+ photos: collection.photos.map(photo => ({
+    ...photo,
+    fileSize: photo.fileSize ? Number(photo.fileSize) : undefined
+  }))
 })
-
   } catch (error) {
     console.error('❌ GET Collection error:', error)
     return NextResponse.json(

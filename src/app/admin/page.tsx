@@ -29,7 +29,8 @@ import {
   CalendarDays,
   Star,
   Tag,
-  X
+  X,
+  HardDrive
 } from "lucide-react"
 
 interface Collection {
@@ -52,9 +53,10 @@ interface Collection {
     x: number
     y: number
   }
-  _count: {
+_count: {
     photos: number
   }
+  totalSizeBytes?: string
 }
 
 interface FilterState {
@@ -94,6 +96,32 @@ export default function AdminDashboard() {
     entryDateTo: null,
     starred: false
   })
+// Helper para formatear bytes a GB/MB
+  const formatSize = (sizeBytes: string | undefined) => {
+    if (!sizeBytes) return '0 MB'
+    
+    const bytes = BigInt(sizeBytes)
+    const gb = Number(bytes) / (1024 * 1024 * 1024)
+    const mb = Number(bytes) / (1024 * 1024)
+    
+    if (gb >= 1) {
+      return `${gb.toFixed(2)} GB`
+    } else {
+      return `${mb.toFixed(0)} MB`
+    }
+  }
+
+  // Helper para color del badge según tamaño
+  const getSizeBadgeVariant = (sizeBytes: string | undefined): "default" | "secondary" | "destructive" => {
+    if (!sizeBytes) return 'secondary'
+    
+    const bytes = BigInt(sizeBytes)
+    const gb = Number(bytes) / (1024 * 1024 * 1024)
+    
+    if (gb < 1) return 'secondary' // Verde/gris para < 1GB
+    if (gb < 10) return 'default'  // Amarillo para 1-10GB
+    return 'destructive'           // Rojo para > 10GB
+  }
 
   const getAuthHeaders = useCallback(() => {
     const token = localStorage.getItem('auth-token')
@@ -583,15 +611,22 @@ const handleToggleStar = async (collection: Collection) => {
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1">
-                        <CardTitle 
-  className="text-lg line-clamp-2 cursor-pointer hover:text-primary"
-  onClick={() => router.push(`/admin/collections/${collection.slug}`)}
->
-  {collection.title}
-</CardTitle>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {collection._count.photos} photos
-                        </p>
+<CardTitle
+                          className="text-lg line-clamp-2 cursor-pointer hover:text-primary"
+                          onClick={() => router.push(`/admin/collections/${collection.slug}`)}
+                        >
+                          {collection.title}
+                        </CardTitle>
+                        <div className="flex items-center gap-2 mt-2">
+                          <p className="text-sm text-muted-foreground">
+                            {collection._count.photos} photos
+                          </p>
+                          <span className="text-muted-foreground">•</span>
+                          <Badge variant={getSizeBadgeVariant(collection.totalSizeBytes)} className="gap-1">
+                            <HardDrive className="h-3 w-3" />
+                            {formatSize(collection.totalSizeBytes)}
+                          </Badge>
+                        </div>
                       </div>
                       <Badge variant="outline">{getStatusText(collection.visibility)}</Badge>
                     </div>
@@ -685,10 +720,16 @@ const handleToggleStar = async (collection: Collection) => {
     <Camera className="h-6 w-6 text-muted-foreground" />
   </div>
 )}
-                  <div className="flex-1">
+<div className="flex-1">
                     <h3 className="font-medium">{collection.title}</h3>
-                    <div className="text-sm text-muted-foreground mt-1">
-                      {collection._count.photos} photos • {formatDate(collection.createdAt)}
+                    <div className="flex items-center gap-2 mt-1">
+                      <div className="text-sm text-muted-foreground">
+                        {collection._count.photos} photos • {formatDate(collection.createdAt)}
+                      </div>
+                      <Badge variant={getSizeBadgeVariant(collection.totalSizeBytes)} className="gap-1">
+                        <HardDrive className="h-3 w-3" />
+                        {formatSize(collection.totalSizeBytes)}
+                      </Badge>
                     </div>
                     {collection.description && (
                       <p className="text-xs text-muted-foreground mt-1 truncate">

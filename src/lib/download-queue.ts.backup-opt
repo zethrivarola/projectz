@@ -1,0 +1,66 @@
+import Bull from 'bull'
+import Redis from 'ioredis'
+
+const redisConfig = {
+  host: process.env.REDIS_HOST || 'localhost',
+  port: parseInt(process.env.REDIS_PORT || '6379'),
+  maxRetriesPerRequest: null,
+  enableReadyCheck: false,
+}
+
+// Crear cliente Redis para Bull
+const client = new Redis(redisConfig)
+const subscriber = new Redis(redisConfig)
+
+// Crear Queue
+export const downloadQueue = new Bull('downloads', {
+  createClient: (type) => {
+    switch (type) {
+      case 'client':
+        return client
+      case 'subscriber':
+        return subscriber
+      default:
+        return new Redis(redisConfig)
+    }
+  },
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: {
+      type: 'exponential',
+      delay: 2000,
+    },
+    removeOnComplete: 100, // Mantener últimos 100 completados
+    removeOnFail: 50, // Mantener últimos 50 fallidos
+  },
+})
+
+export interface DownloadJobData {
+  jobId: string // ID del DownloadJob en DB
+  collectionId: string
+  collectionSlug: string
+  collectionTitle: string
+  format: 'web' | 'original'
+  photoIds?: string[] // null = todas
+}
+
+// Cleanup automático de ZIPs viejos cada hora
+export async function setupCleanupCron() {
+  const cleanupQueue = new Bull('cleanup', {
+    createClient: () => new Redis(redisConfig),
+  })
+
+  // Cada hora a las :00
+  await cleanupQueue.add(
+    'cleanup-old-zips',
+    {},
+    {
+      repeat: { cron: '0 * * * *' }, // Every hour
+      removeOnComplete: true,
+    }
+  )
+
+  return cleanupQueue
+}
+
+console.log('✅ Download queue initialized')

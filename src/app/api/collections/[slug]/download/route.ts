@@ -1,15 +1,14 @@
+// Reemplazar: /src/app/api/collections/[slug]/download/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import * as fs from 'fs'
-import * as path from 'path'
-import archiver from 'archiver'
-import { Readable } from 'stream'
+import { downloadQueue } from '@/lib/download-queue'
+import { findCachedDownload, extendCacheExpiration } from '@/lib/download-cache';
+import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rate-limiter';
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-export const maxDuration = 300 // 5 minutes for large collections
 
-// POST /api/collections/[slug]/download - Generate ZIP for bulk download
+// POST /api/collections/[slug]/download - Crear job de descarga
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
@@ -17,147 +16,179 @@ export async function POST(
   try {
     const { slug } = await params
     const body = await request.json()
-    const { format = 'original', photoIds } = body // format: 'web' | 'original'
+    const { format = 'original', photoIds, notificationEmail } = body
 
-    console.log(`📦 Generating ZIP for collection: ${slug}`)
-    console.log(`   Format: ${format}`)
-    console.log(`   Photos: ${photoIds ? photoIds.length : 'all'}`)
-
-    // Get collection
-    const collection = await prisma.collection.findUnique({
-      where: { slug },
-      include: {
-        photos: {
-          where: photoIds ? { id: { in: photoIds } } : { processingStatus: 'completed' },
-          orderBy: { orderIndex: 'asc' },
-          select: {
-            id: true,
-            originalFilename: true,
-            webUrl: true,
-            originalUrl: true,
-          }
-        }
+    console.log(`📦 Creating download job for collection: ${slug}`)
+    
+    // Validar email si fue proporcionado
+    if (notificationEmail) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (!emailRegex.test(notificationEmail)) {
+        return NextResponse.json(
+          { error: 'Email inválido' },
+          { status: 400 }
+        )
       }
-    })
+      console.log(`📧 Email de notificación: ${notificationEmail}`)
+    }
+
+// RATE LIMITING - Verificar límite por IP
+const clientIP = getClientIP(request);
+console.log(`🌐 Download request from IP: ${clientIP}`);
+
+// Usar límite más estricto para colecciones grandes (>200 fotos o >10GB)
+const isLargeDownload = photoIds ? photoIds.length > 200 : false;
+const rateLimitConfig = isLargeDownload ? RATE_LIMITS.DOWNLOAD_LARGE : RATE_LIMITS.DOWNLOAD;
+
+const rateLimit = await checkRateLimit(clientIP, 'download', rateLimitConfig);
+
+if (!rateLimit.allowed) {
+  console.log(`🚫 Rate limit exceeded for IP ${clientIP}`);
+  return NextResponse.json(
+    {
+      error: rateLimitConfig.message,
+      remaining: rateLimit.remaining,
+      resetTime: rateLimit.resetTime,
+      retryAfter: Math.ceil((rateLimit.resetTime.getTime() - Date.now()) / 1000)
+    },
+    { 
+      status: 429,
+      headers: {
+        'X-RateLimit-Limit': rateLimitConfig.maxRequests.toString(),
+        'X-RateLimit-Remaining': rateLimit.remaining.toString(),
+        'X-RateLimit-Reset': rateLimit.resetTime.toISOString(),
+        'Retry-After': Math.ceil((rateLimit.resetTime.getTime() - Date.now()) / 1000).toString()
+      }
+    }
+  );
+}
+
+console.log(`✅ Rate limit OK for IP ${clientIP}: ${rateLimit.remaining} remaining`);
+
+    // Obtener colección
+const collection = await prisma.collection.findUnique({
+  where: { slug },
+  include: {
+    photos: photoIds && photoIds.length > 0
+      ? { 
+          where: { id: { in: photoIds } },
+          select: { id: true, fileSize: true }
+        }
+      : { select: { id: true, fileSize: true } }
+  }
+})
 
     if (!collection) {
       return NextResponse.json({ error: 'Collection not found' }, { status: 404 })
     }
 
-    // Check if collection is public
+    // Verificar si es pública (agregar auth check si es necesario)
     if (collection.visibility !== 'public') {
-      // For private collections, would need auth check here
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    if (collection.photos.length === 0) {
-      return NextResponse.json({ error: 'No photos to download' }, { status: 400 })
-    }
+// BUSCAR CACHÉ PRIMERO
+console.log('🔍 Checking cache for existing download...');
+const cachedDownload = await findCachedDownload(
+  collection.id,
+  format as 'original' | 'web',
+  photoIds
+);
 
-    console.log(`✅ Found ${collection.photos.length} photos to zip`)
-
-    // Create ZIP archive
-    const archive = archiver('zip', {
-      zlib: { level: 9 } // Maximum compression
-    })
-
-    // Set response headers for ZIP download
-    const zipFilename = `${collection.slug}-${format}.zip`
-    const headers = new Headers()
-    headers.set('Content-Type', 'application/zip')
-    headers.set('Content-Disposition', `attachment; filename="${zipFilename}"`)
-
-    // Handle archive errors
-    archive.on('error', (err) => {
-      console.error('❌ Archive error:', err)
-      throw err
-    })
-
-    // Add photos to archive
-    const uploadDir = process.env.UPLOAD_DIR || './uploads'
-    let addedCount = 0
-
-    for (const photo of collection.photos) {
-      try {
-        // Determine which file to use based on format
-const url = format === 'original' ? photo.originalUrl : photo.webUrl
-
-if (!url) {
-  console.warn(`  ⚠️ No URL for photo ${photo.id}`)
-  continue
+if (cachedDownload) {
+  console.log('✅ Cache hit! Returning existing download');
+  
+  // Extender expiración (opcional, para mantener activo)
+  await extendCacheExpiration(cachedDownload.jobId);
+  
+  // Si hay email, enviar notificación inmediata
+  if (notificationEmail) {
+    const { sendDownloadReadyEmail } = await import('@/lib/email/resend');
+    const totalPhotos = photoIds?.length || collection.photos.length;
+    const zipUrls = cachedDownload.zipUrl.split(',');
+    
+    await sendDownloadReadyEmail({
+      to: notificationEmail,
+      collectionTitle: collection.title,
+      totalPhotos,
+      downloadToken: cachedDownload.jobId,
+      expiresAt: cachedDownload.expiresAt,
+      urls: zipUrls
+    });
+    
+    console.log(`📧 Sent cached download email to ${notificationEmail}`);
+  }
+  
+  return NextResponse.json({
+    success: true,
+    jobId: cachedDownload.jobId,
+    status: 'completed',
+    cached: true,
+    message: notificationEmail 
+      ? 'Descarga lista (caché). Email enviado.'
+      : 'Descarga lista desde caché',
+    zipUrl: cachedDownload.zipUrl,
+    expiresAt: cachedDownload.expiresAt,
+  });
 }
 
-// Extract the file path from URL (remove /api/uploads/ prefix)
-const filePath = url.replace('/api/uploads/', '')
-        const fullPath = path.join(uploadDir, filePath)
+console.log('❌ No cache found. Creating new download job...');
 
-        // Check if file exists
-        if (fs.existsSync(fullPath)) {
-          // Add file to archive with original filename
-          const filename = photo.originalFilename
-          archive.file(fullPath, { name: filename })
-          addedCount++
-          console.log(`  ✓ Added: ${filename}`)
-        } else {
-          console.warn(`  ⚠️ File not found: ${fullPath}`)
-        }
-      } catch (error) {
-        console.error(`  ❌ Error adding photo ${photo.id}:`, error)
-      }
-    }
 
-    if (addedCount === 0) {
-      return NextResponse.json({ error: 'No valid photos found to zip' }, { status: 500 })
-    }
+// Calcular tamaño total
+const totalSize = collection.photos.reduce(
+  (sum, photo) => sum + BigInt(photo.fileSize || 0),
+  BigInt(0)
+);
 
-    // Add a README file with collection info
-    const readmeContent = `${collection.title}
-${'='.repeat(collection.title.length)}
+    // Crear job en DB
+    const job = await prisma.downloadJob.create({
+data: {
+  collectionId: collection.id,
+  format,
+  photoIds: photoIds || [],
+  status: 'pending',
+  progress: 0,
+  totalPhotos: collection.photos.length,  // <-- AGREGAR ESTO
+  totalSize,  // <-- AGREGAR ESTO
+  notificationEmail: notificationEmail || null,
+  emailSent: false,
+  }
+  });
 
-${collection.description || 'Photo collection by René Rivarola Photography'}
+console.log(`✅ Created download job: ${job.id}${notificationEmail ? ` with email: ${notificationEmail}` : ''}`);
 
-Total Photos: ${addedCount}
-Format: ${format === 'original' ? 'Original Quality' : 'Web Quality (1080p)'}
-Downloaded: ${new Date().toLocaleString()}
+    // Agregar a la cola de Bull
+    await downloadQueue.add({
+      jobId: job.id,
+      collectionId: collection.id,
+      collectionSlug: collection.slug,
+      collectionTitle: collection.title,
+      format,
+      photoIds: photoIds || undefined,
+      notificationEmail: notificationEmail || undefined,
+    }, {
+      jobId: job.id, // Usar mismo ID para tracking
+      timeout: 300000, // 5 minutos timeout
+    })
 
----
-© ${new Date().getFullYear()} René Rivarola Photography
-All rights reserved.
-`
-    archive.append(readmeContent, { name: 'README.txt' })
+    console.log(`✅ Job added to queue: ${job.id}`)
 
-// Finalize the archive and collect data
-const chunks: Buffer[] = []
-
-await new Promise<void>((resolve, reject) => {
-  archive.on('data', (chunk: Buffer) => {
-    chunks.push(chunk)
-  })
-  
-  archive.on('end', () => {
-    resolve()
-  })
-  
-  archive.on('error', (err) => {
-    reject(err)
-  })
-  
-  archive.finalize()
-})
-
-const buffer = Buffer.concat(chunks)
-
-console.log(`✅ ZIP created with ${addedCount} photos (${buffer.length} bytes)`)
-
-return new NextResponse(buffer, {
-  headers,
-  status: 200
-})
-
+    return NextResponse.json({
+      success: true,
+      jobId: job.id,
+      status: 'pending',
+      message: notificationEmail 
+        ? 'Tu descarga se está preparando. Recibirás un email cuando esté lista.'
+        : 'Download job created. Processing will start shortly.',
+    })
   } catch (error) {
-    console.error('❌ Bulk download error:', error)
+    console.error('❌ Create download job error:', error)
     return NextResponse.json(
-      { error: 'Failed to create download', details: error instanceof Error ? error.message : 'Unknown error' },
+      {
+        error: 'Failed to create download job',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
     )
   }

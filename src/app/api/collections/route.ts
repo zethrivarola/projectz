@@ -82,6 +82,11 @@ const where: CollectionWhere = {
               webUrl: true
             }
           },
+photos: {
+    select: {
+      fileSize: true
+    }
+  },
           owner: {
             select: {
               name: true,
@@ -96,24 +101,33 @@ const where: CollectionWhere = {
       prisma.collection.count({ where })
     ])
 
-    const formattedCollections = collections.map(collection => ({
-      id: collection.id,
-      title: collection.title,
-      description: collection.description,
-      slug: collection.slug,
-      visibility: collection.visibility,
-      isStarred: collection.isStarred,
-      isFeatured: collection.isFeatured,
-      tags: collection.tags,
-      createdAt: collection.createdAt,
-      updatedAt: collection.updatedAt,
-      dateTaken: collection.dateTaken,
-      coverPhoto: collection.coverPhoto,
-      owner: collection.owner,
-      _count: {
-        photos: collection._count.photos
-      }
-    }))
+const formattedCollections = collections.map(collection => {
+  // Calcular tamaño total de la colección
+  let totalSizeBytes = BigInt(0)
+  for (const photo of collection.photos) {
+    totalSizeBytes += photo.fileSize
+  }
+
+  return {
+    id: collection.id,
+    title: collection.title,
+    description: collection.description,
+    slug: collection.slug,
+    visibility: collection.visibility,
+    isStarred: collection.isStarred,
+    isFeatured: collection.isFeatured,
+    tags: collection.tags,
+    createdAt: collection.createdAt,
+    updatedAt: collection.updatedAt,
+    dateTaken: collection.dateTaken,
+    coverPhoto: collection.coverPhoto,
+    owner: collection.owner,
+    _count: {
+      photos: collection._count.photos
+    },
+    totalSizeBytes: totalSizeBytes.toString()
+  }
+})
 
     console.log(`✅ Returning ${formattedCollections.length} collections`)
 

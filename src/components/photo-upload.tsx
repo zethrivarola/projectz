@@ -104,6 +104,7 @@ export function PhotoUpload({
 
   const response = await fetch('/api/photos/upload', {
     method: 'POST',
+    credentials: 'include',
     body: formData,
   })
 
@@ -120,7 +121,10 @@ export function PhotoUpload({
 }
 
   // EL RESTO DE TU CÓDIGO ACTUAL PERMANECE IGUAL
-  const fileArray = Array.from(files)
+// Sort files alphabetically by name to maintain order
+const fileArray = Array.from(files).sort((a, b) => {
+  return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+})
   for (const file of fileArray) {
   const fileId = `${file.name}-${Date.now()}`
   const validationError = validateFile(file)

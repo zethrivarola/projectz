@@ -30,6 +30,8 @@ import {
   Zap,
   ImageIcon
 } from "lucide-react"
+import Masonry from 'react-masonry-css'
+import { ChevronLeft, Monitor, Smartphone } from "lucide-react"
 
 interface Collection {
   id: string
@@ -131,6 +133,8 @@ export default function CollectionDesignPage() {
   const [photoGridStyle, setPhotoGridStyle] = useState('grid')
   const [focusX, setFocusX] = useState(50)
   const [focusY, setFocusY] = useState(50)
+const [panelCollapsed, setPanelCollapsed] = useState(false)
+const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop')
 
   const getAuthHeaders = useCallback(() => {
     const token = localStorage.getItem('auth-token')
@@ -384,422 +388,370 @@ export default function CollectionDesignPage() {
     )
   }
 
-  return (
-    <div className="flex h-full w-screen h-screen">
-      <div className="flex h-full flex-col lg:flex-row">
-  <div className="w-96 border-r border-border bg-background overflow-y-auto hidden lg:block">
-          <div className="p-6 border-b border-border">
-            <Link href="/admin">
-              <Button variant="ghost" size="sm" className="mb-4">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Dashboard
-              </Button>
-            </Link>
-            <div className="flex items-center justify-between mb-2">
-              <h1 className="text-xl font-semibold">{collection.title}</h1>
-              <Badge variant={autoSave ? "default" : "secondary"}>
-                {autoSave ? "Auto-save" : "Manual"}
-              </Badge>
-            </div>
-            <p className="text-sm text-muted-foreground">Professional Design System</p>
-            
-            <div className="flex items-center justify-between mt-4 p-3 bg-muted/50 rounded-lg">
-              <div className="flex items-center gap-2">
-                <Zap className="h-4 w-4 text-yellow-500" />
-                <span className="text-sm font-medium">Auto-save</span>
-              </div>
-              <Switch checked={autoSave} onCheckedChange={setAutoSave} />
-            </div>
-          </div>
+return (
+  <div className="flex flex-col h-screen w-screen overflow-hidden">
+    {/* Top Bar */}
+    <div className="border-b bg-white px-6 py-3 flex items-center justify-between shrink-0">
+      <div className="flex items-center gap-4">
+        <Link href="/admin">
+          <Button variant="ghost" size="sm">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            {collection.title}
+          </Button>
+        </Link>
+        <Badge variant={autoSave ? "default" : "secondary"} className="text-xs">
+          {autoSave ? "Auto-save" : "Manual"}
+        </Badge>
+      </div>
 
-          <div className="p-6">
-            <Tabs defaultValue="cover" className="space-y-6">
-              <TabsList className="grid grid-cols-4 w-full">
-                <TabsTrigger value="cover">Cover</TabsTrigger>
-                <TabsTrigger value="typography">Type</TabsTrigger>
-                <TabsTrigger value="color">Colors</TabsTrigger>
-                <TabsTrigger value="grid">Layout</TabsTrigger>
-              </TabsList>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => window.open(`/admin/collections/${collection.slug}/preview`, '_blank')}
+        >
+          <Eye className="h-4 w-4 mr-2" />
+          Preview
+        </Button>
+        <Button
+          variant="default"
+          size="sm"
+          onClick={copyShareUrl}
+        >
+          {copied ? <Check className="h-4 w-4 mr-2" /> : <Share2 className="h-4 w-4 mr-2" />}
+          {copied ? 'Copied!' : 'Share'}
+        </Button>
+      </div>
+    </div>
 
-              <TabsContent value="cover" className="space-y-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">Cover Layout</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-2 gap-3">
-                      {COVER_LAYOUTS.map((layout) => (
-                        <Button
-                          key={layout.id}
-                          variant={selectedLayout === layout.id ? "default" : "outline"}
-                          className="h-auto p-3 flex flex-col items-center text-xs"
-                          onClick={() => setSelectedLayout(layout.id)}
-                        >
-                          <div className="w-8 h-6 bg-muted rounded mb-1"></div>
-                          {layout.name}
-                        </Button>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
+    {/* Main Content */}
+    <div className="flex flex-1 overflow-hidden">
+      {/* Left Panel */}
+      <div 
+        className={`border-r bg-white transition-all duration-300 ${
+          panelCollapsed ? 'w-0' : 'w-80'
+        } overflow-hidden`}
+      >
+        <div className="h-full overflow-y-auto p-6">
+          <Tabs defaultValue="cover" className="space-y-6">
+            <TabsList className="grid grid-cols-4 w-full">
+              <TabsTrigger value="cover">Cover</TabsTrigger>
+              <TabsTrigger value="typography">Type</TabsTrigger>
+              <TabsTrigger value="color">Color</TabsTrigger>
+              <TabsTrigger value="grid">Grid</TabsTrigger>
+            </TabsList>
 
-                {collection.coverPhoto && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-base">Cover Focus</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div>
-                        <Label className="text-sm">Horizontal Position</Label>
-                        <Slider
-                          value={[focusX]}
-                          onValueChange={(value) => setFocusX(value[0])}
-                          max={100}
-                          step={1}
-                          className="mt-2"
-                        />
-                        <div className="text-xs text-muted-foreground mt-1">{focusX}%</div>
-                      </div>
-                      <div>
-                        <Label className="text-sm">Vertical Position</Label>
-                        <Slider
-                          value={[focusY]}
-                          onValueChange={(value) => setFocusY(value[0])}
-                          max={100}
-                          step={1}
-                          className="mt-2"
-                        />
-                        <div className="text-xs text-muted-foreground mt-1">{focusY}%</div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-              </TabsContent>
-
-              <TabsContent value="typography" className="space-y-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">Typography</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div>
-                      <Label className="text-sm">Font Family</Label>
-                      <Select value={titleFont} onValueChange={setTitleFont}>
-                        <SelectTrigger className="mt-2">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {FONTS.map((font) => (
-                            <SelectItem key={font.value} value={font.value}>
-                              <span style={{ fontFamily: font.value }}>{font.name}</span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div>
-                      <Label className="text-sm">Title Size</Label>
-                      <Slider
-                        value={[titleSize]}
-                        onValueChange={(value) => setTitleSize(value[0])}
-                        min={24}
-                        max={96}
-                        step={2}
-                        className="mt-2"
-                      />
-                      <div className="text-xs text-muted-foreground mt-1">{titleSize}px</div>
-                    </div>
-
-                    <div>
-                      <Label className="text-sm">Title Color</Label>
-                      <div className="flex items-center gap-3 mt-2">
-                        <input
-                          type="color"
-                          value={titleColor}
-                          onChange={(e) => setTitleColor(e.target.value)}
-                          className="w-12 h-12 rounded border border-border cursor-pointer"
-                        />
-                        <Input
-                          value={titleColor}
-                          onChange={(e) => setTitleColor(e.target.value)}
-                          className="flex-1"
-                          placeholder="#ffffff"
-                        />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="color" className="space-y-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">Color Presets</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-2 gap-2">
-                      {COLOR_PRESETS.map((preset) => (
-                        <Button
-                          key={preset.name}
-                          variant="outline"
-                          className="h-auto p-2 flex items-center gap-2 text-xs"
-                          onClick={() => applyColorPreset(preset)}
-                        >
-                          <div
-                            className="w-4 h-4 rounded"
-                            style={{ backgroundColor: preset.accent }}
-                          />
-                          {preset.name}
-                        </Button>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">Custom Colors</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div>
-                      <Label className="text-sm">Background Color</Label>
-                      <div className="flex items-center gap-3 mt-2">
-                        <input
-                          type="color"
-                          value={backgroundColor}
-                          onChange={(e) => setBackgroundColor(e.target.value)}
-                          className="w-12 h-12 rounded border border-border cursor-pointer"
-                        />
-                        <Input
-                          value={backgroundColor}
-                          onChange={(e) => setBackgroundColor(e.target.value)}
-                          className="flex-1"
-                          placeholder="#ffffff"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label className="text-sm">Accent Color</Label>
-                      <div className="flex items-center gap-3 mt-2">
-                        <input
-                          type="color"
-                          value={accentColor}
-                          onChange={(e) => setAccentColor(e.target.value)}
-                          className="w-12 h-12 rounded border border-border cursor-pointer"
-                        />
-                        <Input
-                          value={accentColor}
-                          onChange={(e) => setAccentColor(e.target.value)}
-                          className="flex-1"
-                          placeholder="#000000"
-                        />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="grid" className="space-y-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">Grid Layout</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div>
-                      <Label className="text-sm">Gallery Style</Label>
-                      <Select value={photoGridStyle} onValueChange={setPhotoGridStyle}>
-                        <SelectTrigger className="mt-2">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="grid">Grid</SelectItem>
-                          <SelectItem value="masonry">Masonry</SelectItem>
-                          <SelectItem value="justified">Justified</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label className="text-sm">Columns</Label>
-                      <Slider
-                        value={[gridColumns]}
-                        onValueChange={(value) => setGridColumns(value[0])}
-                        min={2}
-                        max={6}
-                        step={1}
-                        className="mt-2"
-                      />
-                      <div className="text-xs text-muted-foreground mt-1">{gridColumns} columns</div>
-                    </div>
-
-                    <div>
-                      <Label className="text-sm">Spacing</Label>
-                      <Slider
-                        value={[gridSpacing]}
-                        onValueChange={(value) => setGridSpacing(value[0])}
-                        min={4}
-                        max={32}
-                        step={2}
-                        className="mt-2"
-                      />
-                      <div className="text-xs text-muted-foreground mt-1">{gridSpacing}px</div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            </Tabs>
-
-            <div className="border-t border-border pt-6 mt-6 space-y-3">
-              <div className="flex gap-2">
-                <Button onClick={() => saveDesign(false)} disabled={saving} className="flex-1">
-                  <Save className="h-4 w-4 mr-2" />
-                  {saving ? 'Saving...' : 'Save Design'}
-                </Button>
-                <Button variant="outline" onClick={resetToDefaults} size="sm">
-                  <RotateCcw className="h-4 w-4" />
-                </Button>
-              </div>
-
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => window.open(`/admin/collections/${collection.slug}/preview`, '_blank')}
-                  className="flex-1"
-                >
-                  <Eye className="h-4 w-4 mr-2" />
-                  Preview
-                </Button>
-
-                <Button
-                  variant="outline"
-                  onClick={copyShareUrl}
-                  className="flex-1"
-                >
-                  {copied ? (
-                    <Check className="h-4 w-4 mr-2" />
-                  ) : (
-                    <Share2 className="h-4 w-4 mr-2" />
-                  )}
-                  {copied ? 'Copied!' : 'Share'}
-                </Button>
-              </div>
-
-              {shareUrl && (
-                <div className="p-3 bg-muted rounded-lg">
-                  <Label className="text-xs font-medium">Share URL</Label>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Input
-                      value={shareUrl}
-                      readOnly
-                      className="text-xs"
-                    />
+            <TabsContent value="cover" className="space-y-4">
+              <div>
+                <Label className="text-sm font-medium">Cover Layout</Label>
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  {COVER_LAYOUTS.map((layout) => (
                     <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={copyShareUrl}
+                      key={layout.id}
+                      variant={selectedLayout === layout.id ? "default" : "outline"}
+                      className="h-auto p-3 flex flex-col items-center text-xs"
+                      onClick={() => setSelectedLayout(layout.id)}
                     >
-                      <Copy className="h-3 w-3" />
+                      <div className="w-8 h-6 bg-muted rounded mb-1"></div>
+                      {layout.name}
                     </Button>
+                  ))}
+                </div>
+              </div>
+
+              {collection.coverPhoto && (
+                <div className="space-y-4 pt-4 border-t">
+                  <div>
+                    <Label className="text-sm">Horizontal Position</Label>
+                    <Slider
+                      value={[focusX]}
+                      onValueChange={(value) => setFocusX(value[0])}
+                      max={100}
+                      step={1}
+                      className="mt-2"
+                    />
+                    <div className="text-xs text-muted-foreground mt-1">{focusX}%</div>
                   </div>
+                  <div>
+                    <Label className="text-sm">Vertical Position</Label>
+                    <Slider
+                      value={[focusY]}
+                      onValueChange={(value) => setFocusY(value[0])}
+                      max={100}
+                      step={1}
+                      className="mt-2"
+                    />
+                    <div className="text-xs text-muted-foreground mt-1">{focusY}%</div>
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="typography" className="space-y-4">
+              <div>
+                <Label className="text-sm">Font Family</Label>
+                <Select value={titleFont} onValueChange={setTitleFont}>
+                  <SelectTrigger className="mt-2">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FONTS.map((font) => (
+                      <SelectItem key={font.value} value={font.value}>
+                        <span style={{ fontFamily: font.value }}>{font.name}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="text-sm">Title Size</Label>
+                <Slider
+                  value={[titleSize]}
+                  onValueChange={(value) => setTitleSize(value[0])}
+                  min={24}
+                  max={96}
+                  step={2}
+                  className="mt-2"
+                />
+                <div className="text-xs text-muted-foreground mt-1">{titleSize}px</div>
+              </div>
+
+              <div>
+                <Label className="text-sm">Title Color</Label>
+                <div className="flex items-center gap-3 mt-2">
+                  <input
+                    type="color"
+                    value={titleColor}
+                    onChange={(e) => setTitleColor(e.target.value)}
+                    className="w-12 h-12 rounded border cursor-pointer"
+                  />
+                  <Input
+                    value={titleColor}
+                    onChange={(e) => setTitleColor(e.target.value)}
+                    className="flex-1"
+                  />
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="color" className="space-y-4">
+              <div>
+                <Label className="text-sm font-medium">Presets</Label>
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  {COLOR_PRESETS.map((preset) => (
+                    <Button
+                      key={preset.name}
+                      variant="outline"
+                      className="h-auto p-2 flex items-center gap-2 text-xs"
+                      onClick={() => applyColorPreset(preset)}
+                    >
+                      <div
+                        className="w-4 h-4 rounded"
+                        style={{ backgroundColor: preset.accent }}
+                      />
+                      {preset.name}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pt-4 border-t space-y-4">
+                <div>
+                  <Label className="text-sm">Background</Label>
+                  <div className="flex items-center gap-3 mt-2">
+                    <input
+                      type="color"
+                      value={backgroundColor}
+                      onChange={(e) => setBackgroundColor(e.target.value)}
+                      className="w-12 h-12 rounded border cursor-pointer"
+                    />
+                    <Input
+                      value={backgroundColor}
+                      onChange={(e) => setBackgroundColor(e.target.value)}
+                      className="flex-1"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <Label className="text-sm">Accent</Label>
+                  <div className="flex items-center gap-3 mt-2">
+                    <input
+                      type="color"
+                      value={accentColor}
+                      onChange={(e) => setAccentColor(e.target.value)}
+                      className="w-12 h-12 rounded border cursor-pointer"
+                    />
+                    <Input
+                      value={accentColor}
+                      onChange={(e) => setAccentColor(e.target.value)}
+                      className="flex-1"
+                    />
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="grid" className="space-y-4">
+              <div>
+                <Label className="text-sm">Columns</Label>
+                <Slider
+                  value={[gridColumns]}
+                  onValueChange={(value) => setGridColumns(value[0])}
+                  min={2}
+                  max={6}
+                  step={1}
+                  className="mt-2"
+                />
+                <div className="text-xs text-muted-foreground mt-1">{gridColumns} columns</div>
+              </div>
+
+              <div>
+                <Label className="text-sm">Spacing</Label>
+                <Slider
+                  value={[gridSpacing]}
+                  onValueChange={(value) => setGridSpacing(value[0])}
+                  min={4}
+                  max={32}
+                  step={2}
+                  className="mt-2"
+                />
+                <div className="text-xs text-muted-foreground mt-1">{gridSpacing}px</div>
+              </div>
+            </TabsContent>
+          </Tabs>
+
+          <div className="border-t pt-4 mt-6 space-y-2">
+            <Button onClick={() => saveDesign(false)} disabled={saving} className="w-full">
+              <Save className="h-4 w-4 mr-2" />
+              {saving ? 'Saving...' : 'Save Design'}
+            </Button>
+            <Button variant="outline" onClick={resetToDefaults} className="w-full">
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Reset
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Preview Area */}
+      <div className="flex-1 bg-gray-50 overflow-auto relative">
+        <div className={`h-full flex items-center justify-center p-8 ${
+          previewMode === 'mobile' ? 'bg-gray-100' : ''
+        }`}>
+          <div 
+            className={`bg-white shadow-2xl overflow-hidden transition-all ${
+              previewMode === 'mobile' ? 'w-[375px]' : 'w-full max-w-5xl'
+            }`}
+            style={{ 
+              height: previewMode === 'mobile' ? '667px' : 'auto',
+              maxHeight: previewMode === 'mobile' ? '667px' : '100%'
+            }}
+          >
+            {/* Cover Preview */}
+            <div
+              className="relative w-full overflow-hidden"
+              style={{
+                backgroundColor,
+                height: previewMode === 'mobile' ? '40vh' : '50vh'
+              }}
+            >
+              {collection.coverPhoto ? (
+                <img
+                  src={collection.coverPhoto.webUrl}
+                  alt="Cover"
+                  className="absolute inset-0 w-full h-full object-cover"
+                  style={{
+                    objectPosition: `${focusX}% ${focusY}%`
+                  }}
+                />
+              ) : (
+                <div className="flex items-center justify-center h-full text-gray-400">
+                  <ImageIcon className="h-16 w-16" />
+                </div>
+              )}
+
+              <div className="absolute inset-0 bg-black/40"></div>
+
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="text-center px-4">
+                  <h1
+                    className="font-bold tracking-wide"
+                    style={{
+                      fontFamily: titleFont,
+                      fontSize: previewMode === 'mobile' ? `${titleSize * 0.6}px` : `${titleSize}px`,
+                      color: titleColor
+                    }}
+                  >
+                    {collection.title.toUpperCase()}
+                  </h1>
+                </div>
+              </div>
+            </div>
+
+            {/* Gallery Preview with Masonry */}
+            <div className="p-4 overflow-auto" style={{ backgroundColor, maxHeight: previewMode === 'mobile' ? '27vh' : '40vh' }}>
+              {photos.length > 0 ? (
+                <Masonry
+                  breakpointCols={previewMode === 'mobile' ? 2 : gridColumns}
+                  className="flex w-full"
+                  columnClassName="bg-clip-padding"
+                  style={{ gap: `${gridSpacing}px` }}
+                >
+                  {photos.slice(0, 12).map((photo) => (
+                    <div
+                      key={photo.id}
+                      className="overflow-hidden rounded"
+                      style={{ marginBottom: `${gridSpacing}px` }}
+                    >
+                      <img
+                        src={photo.thumbnailUrl}
+                        alt={photo.originalFilename}
+                        className="w-full h-auto object-cover"
+                      />
+                    </div>
+                  ))}
+                </Masonry>
+              ) : (
+                <div className="flex items-center justify-center h-32 text-gray-400">
+                  <p className="text-sm">No photos in collection</p>
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        <div className="flex-1 bg-muted/50 overflow-auto p-8">
-  <div className="w-full max-w-4xl mx-auto">
-    <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-      <div
-  className="relative w-full overflow-hidden"
-  style={{ 
-  backgroundColor,
-  aspectRatio: '16 / 9',
-  maxHeight: '50vh',
-  overflow: 'hidden'
-}}
->
-                {collection.coverPhoto ? (
-                  <img
-  src={collection.coverPhoto.webUrl}
-  alt="Cover"
-  className="absolute inset-0 w-full h-full object-cover"
-  style={{
-    objectPosition: `${focusX}% ${focusY}%`
-  }}
-                  />
-                ) : (
-                  <div className="flex items-center justify-center h-full text-muted-foreground">
-                    No cover photo selected
-                  </div>
-                )}
-
-                <div className="absolute inset-0 bg-black/40"></div>
-
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="text-center">
-                    <h1
-                      className="font-bold tracking-wide"
-                      style={{
-                        fontFamily: titleFont,
-                        fontSize: `${titleSize}px`,
-                        color: titleColor
-                      }}
-                    >
-                      {collection.title.toUpperCase()}
-                    </h1>
-                    <div className="mt-4">
-                      <Button
-                        variant="outline"
-                        className="bg-white/20 border-white/30 text-white hover:bg-white/30"
-                      >
-                        VIEW GALLERY
-                      </Button>
-                    </div>
-                    <div className="mt-8">
-                      <p className="text-white/80 text-xs tracking-wider">
-                        RENÉ RIVAROLA PHOTOGRAPHY
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-8" style={{ backgroundColor }}>
-                <div
-                  className="grid gap-2"
-                  style={{
-                    gridTemplateColumns: `repeat(${gridColumns}, 1fr)`,
-                    gap: `${gridSpacing * 0.5}px`
-                  }}
-                >
-                  {photos.slice(0, gridColumns * 2).map((photo, index) => (
-                    <div
-                      key={index}
-                      className="aspect-square bg-muted rounded overflow-hidden"
-                    >
-                      <img
-                        src={photo.thumbnailUrl}
-                        alt={photo.originalFilename}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  ))}
-                  {Array.from({ length: Math.max(0, (gridColumns * 2) - photos.length) }).map((_, index) => (
-                    <div
-                      key={`placeholder-${index}`}
-                      className="aspect-square bg-muted/50 rounded flex items-center justify-center"
-                    >
-                      <ImageIcon className="h-8 w-8 text-muted-foreground" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
+        {/* Desktop/Mobile Toggle */}
+        <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-white border rounded-lg shadow-lg p-1 flex gap-1">
+          <Button
+            variant={previewMode === 'desktop' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setPreviewMode('desktop')}
+            className="gap-2"
+          >
+            <Monitor className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={previewMode === 'mobile' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setPreviewMode('mobile')}
+            className="gap-2"
+          >
+            <Smartphone className="h-4 w-4" />
+          </Button>
         </div>
       </div>
-   </div>
-  )
+
+      {/* Collapse Button */}
+      <button
+        onClick={() => setPanelCollapsed(!panelCollapsed)}
+        className="absolute left-0 bottom-4 bg-white border border-r-0 rounded-r-lg p-2 shadow-lg hover:bg-gray-50 transition-colors z-10"
+        style={{ left: panelCollapsed ? '0' : '320px' }}
+      >
+        <ChevronLeft className={`h-4 w-4 transition-transform ${panelCollapsed ? 'rotate-180' : ''}`} />
+      </button>
+    </div>
+  </div>
+)
 }

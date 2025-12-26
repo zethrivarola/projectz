@@ -1,3 +1,4 @@
+import '@/lib/init-workers'
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
@@ -5,8 +6,15 @@ import "./globals.css"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Zeth Rivarola Photography",
+  title: 'René Rivarola Photography',
   description: "Professional Photography Client Gallery System",
+}
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 }
 
 export default function RootLayout({
@@ -16,11 +24,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
-        <div className="min-h-screen bg-background">
-          {children}
-        </div>
-      </body>
+      <body className={inter.className}>{children}</body>
     </html>
   )
 }

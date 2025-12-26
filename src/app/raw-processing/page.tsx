@@ -153,11 +153,11 @@ const fetchCollections = async () => {
     }
   }
 
-  useEffect(() => {
+
+useEffect(() => {
   fetchCollections()
   fetchRawPhotos()
 }, [fetchCollections, fetchRawPhotos])
-
   
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
