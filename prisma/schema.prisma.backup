@@ -61,7 +61,7 @@ model User {
 
 model Collection {
   id                        String               @id @default(uuid())
-  ownerId                   String?              @map("owner_id")
+  ownerId                   String               @map("owner_id")
   title                     String
   description               String?
   slug                      String               @unique
@@ -102,7 +102,7 @@ lastModified      DateTime?            @default(now()) @map("last_modified")
   contacts                  CollectionContact[]
   collectionShares          CollectionShare[]
   coverPhoto                Photo?               @relation("CollectionCoverPhoto", fields: [coverPhotoId], references: [id])
-  owner                     User?                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  owner                     User                 @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   watermark                 Watermark?           @relation(fields: [watermarkId], references: [id])
   downloadPins              DownloadPin[]
   emailActivities           EmailActivity[]
@@ -521,9 +521,11 @@ notificationEmail  String?           @map("notification_email")
 
 
 enum UserRole {
-  SUPER_ADMIN    // Tú - Acceso total
-  PHOTOGRAPHER   // Otros fotógrafos (futuro)
-  CLIENT         // Clientes privados
+  SUPER_ADMIN    // Tú - acceso total
+  PHOTOGRAPHER   // Fotógrafos - solo sus colecciones
+  OWNER          // Legacy - mantener compatibilidad
+  USER           // Legacy - mantener compatibilidad  
+  CLIENT         // Clientes - solo galerías compartidas
 }
 
 enum CollectionVisibility {

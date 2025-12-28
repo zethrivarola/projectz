@@ -14,11 +14,6 @@ const UpdateCollectionSchema = z.object({
   isFeatured: z.boolean().optional(),
 })
 
-// Helper para verificar si es admin (solo SUPER_ADMIN)
-function isAdmin(role: string): boolean {
-  return role === 'SUPER_ADMIN'
-}
-
 // GET /api/collections/[slug] - Get single collection with photos (PUBLIC + ADMIN)
 export async function GET(
   request: NextRequest,
@@ -50,7 +45,7 @@ export async function GET(
             id: true,
             filename: true,
             originalFilename: true,
-            fileSize: true,
+            fileSize: true,          
             thumbnailUrl: true,
             webUrl: true,
             highResUrl: true,
@@ -84,56 +79,56 @@ export async function GET(
 
     // Check access permissions
     const isOwner = payload && collection.ownerId === payload.userId
-    const userIsAdmin = payload && isAdmin(payload.role)
+    const isAdmin = payload && payload.role === 'admin'
     const isPublic = collection.visibility === 'public'
 
     // If not public and user is not owner/admin, deny access
-    if (!isPublic && !isOwner && !userIsAdmin) {
+    if (!isPublic && !isOwner && !isAdmin) {
       console.log(`❌ Access denied: Collection is ${collection.visibility}`)
       return NextResponse.json({ error: 'This collection is private' }, { status: 403 })
     }
 
     console.log(`✅ Collection found: ${collection.title} with ${collection.photos.length} photos`)
 
-    // Return in gallery format
+    // Return in gallery format (matching the shared gallery structure)
     return NextResponse.json({
-      collection: {
-        id: collection.id,
-        title: collection.title,
-        description: collection.description,
-        slug: collection.slug,
-        coverPhoto: collection.coverPhoto,
-        tags: collection.tags,
-        dateTaken: collection.dateTaken,
-        createdAt: collection.createdAt,
-        updatedAt: collection.updatedAt,
-        visibility: collection.visibility,
-        isStarred: collection.isStarred,
-        isFeatured: collection.isFeatured,
-        _count: collection._count,
-        design: {
-          coverLayout: collection.coverLayout || 'center',
-          typography: {
-            titleFont: collection.typographyStyle || 'Inter',
-            titleSize: collection.titleSize || 48,
-            titleColor: collection.titleColor || '#ffffff'
-          },
-          colors: {
-            background: collection.customBackgroundColor || '#ffffff',
-            accent: collection.customAccentColor || '#000000'
-          },
-          grid: {
-            columns: collection.gridColumns || 4,
-            spacing: collection.gridSpacing || 8
-          },
-          coverFocus: collection.coverFocalPoint || { x: 50, y: 50 }
-        }
+  collection: {
+    id: collection.id,
+    title: collection.title,
+    description: collection.description,
+    slug: collection.slug,
+    coverPhoto: collection.coverPhoto,
+    tags: collection.tags,
+    dateTaken: collection.dateTaken,
+    createdAt: collection.createdAt,
+    updatedAt: collection.updatedAt,
+    visibility: collection.visibility,
+    isStarred: collection.isStarred,
+    isFeatured: collection.isFeatured,
+    _count: collection._count,
+    design: {
+      coverLayout: collection.coverLayout || 'center',
+      typography: {
+        titleFont: collection.typographyStyle || 'Inter',
+        titleSize: collection.titleSize || 48,
+        titleColor: collection.titleColor || '#ffffff'
       },
-      photos: collection.photos.map(photo => ({
-        ...photo,
-        fileSize: photo.fileSize ? Number(photo.fileSize) : undefined
-      }))
-    })
+      colors: {
+        background: collection.customBackgroundColor || '#ffffff',
+        accent: collection.customAccentColor || '#000000'
+      },
+      grid: {
+        columns: collection.gridColumns || 4,
+        spacing: collection.gridSpacing || 8
+      },
+      coverFocus: collection.coverFocalPoint || { x: 50, y: 50 }
+    }
+  },
+ photos: collection.photos.map(photo => ({
+    ...photo,
+    fileSize: photo.fileSize ? Number(photo.fileSize) : undefined
+  }))
+})
   } catch (error) {
     console.error('❌ GET Collection error:', error)
     return NextResponse.json(
@@ -178,8 +173,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Collection not found' }, { status: 404 })
     }
 
-    const userIsAdmin = isAdmin(payload.role)
-    if (existingCollection.ownerId !== payload.userId && !userIsAdmin) {
+    if (existingCollection.ownerId !== payload.userId && payload.role !== 'admin') {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
@@ -261,17 +255,13 @@ export async function DELETE(
     console.log(`🔍 DELETE Collection: ${slug}`)
 
     if (!token) {
-      console.log('❌ No token provided')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const payload = AuthService.verifyToken(token)
     if (!payload) {
-      console.log('❌ Invalid token')
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
-
-    console.log(`👤 User attempting delete: ${payload.email} (role: ${payload.role})`)
 
     // Check if collection exists and user owns it
     const collection = await prisma.collection.findUnique({
@@ -282,15 +272,10 @@ export async function DELETE(
     })
 
     if (!collection) {
-      console.log('❌ Collection not found')
       return NextResponse.json({ error: 'Collection not found' }, { status: 404 })
     }
 
-    const userIsAdmin = isAdmin(payload.role)
-    console.log(`🔐 Admin check: ${userIsAdmin}, Owner check: ${collection.ownerId === payload.userId}`)
-
-    if (collection.ownerId !== payload.userId && !userIsAdmin) {
-      console.log('❌ Access denied - Not owner or admin')
+    if (collection.ownerId !== payload.userId && payload.role !== 'admin') {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
@@ -299,9 +284,9 @@ export async function DELETE(
       where: { slug }
     })
 
-    console.log(`✅ Collection deleted: ${collection.title} (${collection.photos.length} photos)`)
+    console.log(`✅ Collection deleted: ${collection.title}`)
 
-    return NextResponse.json({
+    return NextResponse.json({ 
       message: 'Collection deleted successfully',
       deletedPhotos: collection.photos.length
     })
@@ -309,7 +294,7 @@ export async function DELETE(
   } catch (error) {
     console.error('❌ DELETE Collection error:', error)
     return NextResponse.json(
-      { error: 'Failed to delete collection', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }
