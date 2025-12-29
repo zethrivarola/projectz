@@ -68,7 +68,7 @@ if (!isCommonImage && !isRawByExtension) {
     if (!collection) return NextResponse.json({ error: 'Collection not found' }, { status: 404 })
 
     // payload.userId debe existir en tu token
-    if (collection.ownerId !== payload.userId && payload.role !== 'OWNER' && payload.role !== 'USER' && payload.role !== 'ADMIN') {
+    if (collection.ownerId !== payload.userId && payload.role !== 'SUPER_ADMIN') {
       // si tienes roles distintos adapta esta validación
       return NextResponse.json({ error: 'Access denied - not owner' }, { status: 403 })
     }

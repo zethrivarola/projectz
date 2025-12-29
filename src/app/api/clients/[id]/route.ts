@@ -86,7 +86,13 @@ export async function GET(
 
     console.log(`✅ Client found: ${client.email} with ${client.collections.length} collections`)
 
-    return NextResponse.json({ client })
+    // Convertir BigInt a string para JSON
+    return NextResponse.json({ 
+      client: {
+        ...client,
+        storageUsedBytes: client.storageUsedBytes.toString()
+      }
+    })
 
   } catch (error) {
     console.error('❌ GET Client error:', error)

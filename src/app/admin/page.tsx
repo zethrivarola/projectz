@@ -749,6 +749,16 @@ const handleToggleStar = async (collection: Collection) => {
                       >
                         <Settings className="h-4 w-4" />
                       </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={(e) => {
+  e.stopPropagation()
+  window.open(`/admin/collections/${collection.slug}/preview`, '_blank')
+}}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
                       <Button 
                         size="sm" 
                         variant="ghost"

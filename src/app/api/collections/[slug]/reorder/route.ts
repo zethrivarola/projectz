@@ -4,6 +4,10 @@ import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import type { Prisma } from '@prisma/client'
 
+function isAdmin(role: string): boolean {
+  return role === 'SUPER_ADMIN'
+}
+
 const ReorderSchema = z.object({
   photoOrders: z.array(z.object({
     id: z.string(),
@@ -21,7 +25,7 @@ export async function PUT(
     // Check authentication
     const authHeader = request.headers.get('authorization')
     const token = authHeader?.replace('Bearer ', '') || request.cookies.get('auth-token')?.value
-
+    
     if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -33,27 +37,29 @@ export async function PUT(
 
     const body = await request.json()
     const { photoOrders } = ReorderSchema.parse(body)
-
+    
     console.log(`Reordering photos for collection ${slug}:`, photoOrders.length, 'photos')
 
-    // Find the collection by slug using Prisma
-    const collection = await prisma.collection.findFirst({
-      where: {
-        slug: slug,
-        ownerId: payload.userId
-      }
+    // Find the collection by slug
+    const collection = await prisma.collection.findUnique({
+      where: { slug }
     })
 
     if (!collection) {
       return NextResponse.json({ error: 'Collection not found' }, { status: 404 })
     }
 
-    // Check ownership (already filtered in the query above)
+    // Check ownership or admin
+    const userIsAdmin = isAdmin(payload.role)
+    if (collection.ownerId !== payload.userId && !userIsAdmin) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    }
+
     console.log(`Found collection: ${collection.title} (${collection.id})`)
 
     // Update the orderIndex for each photo using Prisma transaction
     let updatedCount = 0
-    
+
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       for (const photoOrder of photoOrders) {
         const result = await tx.photo.updateMany({
@@ -86,7 +92,7 @@ export async function PUT(
 
   } catch (error) {
     console.error('Reorder photos error:', error)
-
+    
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: 'Invalid request data', details: error.issues },

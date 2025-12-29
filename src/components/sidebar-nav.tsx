@@ -9,7 +9,8 @@ import {
   Settings,
   Upload,
   BarChart3,
-  AlertCircle
+  AlertCircle,
+  Users
 } from "lucide-react"
 
 interface NavItem {
@@ -18,12 +19,16 @@ interface NavItem {
   icon: React.ComponentType<{ className?: string }>
   badge?: string
 }
-
 const navigationItems: NavItem[] = [
   {
     title: "Dashboard",
     href: "/admin",
     icon: Home,
+  },
+  {
+    title: "Clientes",
+    href: "/admin/clients",
+    icon: Users,
   },
   {
     title: "Upload",

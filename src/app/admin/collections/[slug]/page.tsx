@@ -16,6 +16,7 @@ import {
   X,
   ArrowLeft,
   Check,
+  Eye,
   Settings,
   Edit,
   Upload,
@@ -987,6 +988,12 @@ return (
                 <Button variant="outline" className="gap-2">
                   <Settings className="h-4 w-4" />
                   Design
+                </Button>
+              </Link>
+              <Link href={`/admin/collections/${slug}/preview`} target="_blank">
+                <Button variant="outline" className="gap-2">
+                  <Eye className="h-4 w-4" />
+                  Preview
                 </Button>
               </Link>
               <Button
