@@ -234,3 +234,84 @@ export const generateDownloadPin = AuthService.generateDownloadPin
 export const generateSlug = AuthService.generateSlug
 export const generateVerificationToken = AuthService.generateVerificationToken
 export const refreshAccessToken = AuthService.refreshAccessToken
+// ====== FUNCIONES DE PERMISOS Y AUTORIZACIÓN ======
+
+/**
+ * Verifica si un rol es Super Admin
+ */
+export function isSuperAdmin(role: string): boolean {
+  return role === 'SUPER_ADMIN'
+}
+
+/**
+ * Verifica si un rol es Admin (Super Admin o Photographer)
+ * NOTA: Photographer solo tiene acceso a SUS clientes
+ */
+export function isAdmin(role: string): boolean {
+  return role === 'SUPER_ADMIN' || role === 'PHOTOGRAPHER'
+}
+
+export interface PermissionCheckParams {
+  userRole: string
+  userId: string
+  resourceOwnerId?: string | null // El owner de la collection/resource
+  resourceOwnerCreatedBy?: string | null // Quién creó al owner (para validar photographer)
+}
+
+/**
+ * Verifica si un usuario puede acceder a un recurso (collection, photo, etc)
+ * 
+ * Reglas de acceso:
+ * - SUPER_ADMIN: Acceso absoluto a TODO
+ * - PHOTOGRAPHER: Solo a SUS recursos y recursos de SUS clientes
+ * - CLIENT: Solo a SUS propios recursos
+ * 
+ * @param params - Parámetros de verificación
+ * @returns true si tiene acceso, false si no
+ */
+export function canAccessResource(params: PermissionCheckParams): boolean {
+  const { userRole, userId, resourceOwnerId, resourceOwnerCreatedBy } = params
+
+  // SUPER_ADMIN tiene acceso absoluto
+  if (userRole === 'SUPER_ADMIN') {
+    return true
+  }
+
+  // PHOTOGRAPHER solo puede acceder si:
+  // 1. Es el owner del recurso, O
+  // 2. El owner es un cliente que ÉL creó
+  if (userRole === 'PHOTOGRAPHER') {
+    // Es su propio recurso
+    if (resourceOwnerId === userId) {
+      return true
+    }
+    // Es un recurso de un cliente suyo
+    if (resourceOwnerCreatedBy === userId) {
+      return true
+    }
+    return false
+  }
+
+  // CLIENT solo puede acceder si es el owner
+  if (userRole === 'CLIENT') {
+    return resourceOwnerId === userId
+  }
+
+  return false
+}
+
+/**
+ * Verifica si un usuario puede modificar un recurso
+ * (Mismas reglas que canAccessResource pero más estricto)
+ */
+export function canModifyResource(params: PermissionCheckParams): boolean {
+  return canAccessResource(params)
+}
+
+/**
+ * Verifica si un usuario puede eliminar un recurso
+ * (Mismas reglas que canAccessResource)
+ */
+export function canDeleteResource(params: PermissionCheckParams): boolean {
+  return canAccessResource(params)
+}
