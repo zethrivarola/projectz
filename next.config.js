@@ -61,7 +61,7 @@ const nextConfig = {
 
   // Configuración experimental para permitir subir archivos grandes
   experimental: {
-    serverActionsBodySizeLimit: '100mb',
+    serverActionsBodySizeLimit: '500mb',
   },
 }
 

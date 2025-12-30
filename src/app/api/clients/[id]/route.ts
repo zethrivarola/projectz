@@ -15,7 +15,6 @@ const UpdateClientSchema = z.object({
   password: z.string().min(8).optional(),
 })
 
-// GET /api/clients/[id] - Ver cliente con sus collections
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -27,7 +26,7 @@ export async function GET(
     const cookieToken = request.cookies.get('auth-token')?.value
     const token = bearerToken || cookieToken
 
-    console.log(`🔍 GET Client: ${id}`)
+    console.log('GET Client:', id)
 
     if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -70,6 +69,11 @@ export async function GET(
             },
             _count: {
               select: { photos: true }
+            },
+            photos: {
+              select: {
+                fileSize: true
+              }
             }
           },
           orderBy: { createdAt: 'desc' }
@@ -84,26 +88,33 @@ export async function GET(
       return NextResponse.json({ error: 'Client not found' }, { status: 404 })
     }
 
-    console.log(`✅ Client found: ${client.email} with ${client.collections.length} collections`)
+    console.log('Client found:', client.email, 'with', client.collections.length, 'collections')
 
-    // Convertir BigInt a string para JSON
-    return NextResponse.json({ 
+    let totalStorageUsed = BigInt(0)
+    const collectionsWithSize = client.collections.map(collection => {
+      const totalSize = collection.photos.reduce((sum, photo) => sum + photo.fileSize, BigInt(0))
+      totalStorageUsed += totalSize
+      return {
+        ...collection,
+        totalSizeBytes: totalSize.toString(),
+        photos: undefined
+      }
+    })
+
+    return NextResponse.json({
       client: {
         ...client,
-        storageUsedBytes: client.storageUsedBytes.toString()
+        storageUsedBytes: totalStorageUsed.toString(),
+        collections: collectionsWithSize
       }
     })
 
   } catch (error) {
-    console.error('❌ GET Client error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    console.error('GET Client error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
-// PATCH /api/clients/[id] - Actualizar cliente
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -115,7 +126,7 @@ export async function PATCH(
     const cookieToken = request.cookies.get('auth-token')?.value
     const token = bearerToken || cookieToken
 
-    console.log(`🔍 PATCH Client: ${id}`)
+    console.log('PATCH Client:', id)
 
     if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -129,7 +140,6 @@ export async function PATCH(
     const body = await request.json()
     const data = UpdateClientSchema.parse(body)
 
-    // Verificar que el cliente existe
     const existingClient = await prisma.user.findUnique({
       where: { id, role: 'CLIENT' }
     })
@@ -138,13 +148,11 @@ export async function PATCH(
       return NextResponse.json({ error: 'Client not found' }, { status: 404 })
     }
 
-    // Hash password si se proporciona
     let passwordHash = existingClient.passwordHash
     if (data.password) {
       passwordHash = await AuthService.hashPassword(data.password)
     }
 
-    // Actualizar cliente
     const updatedClient = await prisma.user.update({
       where: { id },
       data: {
@@ -166,12 +174,11 @@ export async function PATCH(
       }
     })
 
-    console.log(`✅ Client updated: ${updatedClient.email}`)
-
+    console.log('Client updated:', updatedClient.email)
     return NextResponse.json({ client: updatedClient })
 
   } catch (error) {
-    console.error('❌ PATCH Client error:', error)
+    console.error('PATCH Client error:', error)
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -180,14 +187,10 @@ export async function PATCH(
       )
     }
 
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
-// DELETE /api/clients/[id] - Eliminar cliente
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -199,7 +202,7 @@ export async function DELETE(
     const cookieToken = request.cookies.get('auth-token')?.value
     const token = bearerToken || cookieToken
 
-    console.log(`🔍 DELETE Client: ${id}`)
+    console.log('DELETE Client:', id)
 
     if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -210,7 +213,6 @@ export async function DELETE(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
-    // Verificar que el cliente existe
     const client = await prisma.user.findUnique({
       where: { id, role: 'CLIENT' },
       include: {
@@ -224,12 +226,11 @@ export async function DELETE(
       return NextResponse.json({ error: 'Client not found' }, { status: 404 })
     }
 
-    // Eliminar cliente (cascade eliminará sus collections)
     await prisma.user.delete({
       where: { id }
     })
 
-    console.log(`✅ Client deleted: ${client.email} (${client._count.collections} collections removed)`)
+    console.log('Client deleted:', client.email, '-', client._count.collections, 'collections removed')
 
     return NextResponse.json({
       message: 'Client deleted successfully',
@@ -237,10 +238,7 @@ export async function DELETE(
     })
 
   } catch (error) {
-    console.error('❌ DELETE Client error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    console.error('DELETE Client error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
