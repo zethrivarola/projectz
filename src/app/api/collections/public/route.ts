@@ -15,6 +15,9 @@ export async function GET(request: NextRequest) {
       },
       include: {
         coverPhoto: {
+          where: {
+            isHidden: false  // Solo cover photos NO ocultas
+          },
           select: {
             id: true,
             thumbnailUrl: true,
@@ -22,7 +25,13 @@ export async function GET(request: NextRequest) {
           }
         },
         _count: {
-          select: { photos: true }
+          select: { 
+            photos: {
+              where: {
+                isHidden: false  // Contar solo fotos NO ocultas
+              }
+            }
+          }
         }
       },
       orderBy: [
@@ -57,7 +66,6 @@ export async function GET(request: NextRequest) {
       collections: safeCollections,
       total: safeCollections.length
     })
-
   } catch (error) {
     console.error('❌ Error fetching public collections:', error)
     return NextResponse.json(

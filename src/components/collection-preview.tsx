@@ -23,7 +23,9 @@ import {
   Check,
   Square,
   Settings,
-  Loader2
+  Loader2,
+  Eye,
+  EyeOff,
 } from "lucide-react"
 
 interface CollectionPreviewProps {
@@ -37,6 +39,7 @@ interface Collection {
   title: string
   description?: string
   slug: string
+  ownerId?: string
   coverPhoto?: {
     id: string
     thumbnailUrl: string
@@ -78,6 +81,7 @@ interface Photo {
   width?: number
   height?: number
   fileSize?: number
+  isHidden?: boolean
 }
 
 export function CollectionPreview({ slug, token, isAdminView = false }: CollectionPreviewProps) {
@@ -100,6 +104,9 @@ export function CollectionPreview({ slug, token, isAdminView = false }: Collecti
 const [showPasswordDialog, setShowPasswordDialog] = useState(false)
   const [password, setPassword] = useState('')
   const [passwordError, setPasswordError] = useState('')  
+  const [currentUser, setCurrentUser] = useState<{ id: string; role: string } | null>(null)
+  const [isOwner, setIsOwner] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
 const [downloadFormat, setDownloadFormat] = useState<'web' | 'original'>('original')
 const [showDownloadMenu, setShowDownloadMenu] = useState(false)
 const [downloadJobId, setDownloadJobId] = useState<string | null>(null)
@@ -121,12 +128,18 @@ const [downloadInfo, setDownloadInfo] = useState<{
     try {
       setLoading(true)
       setError('')
+
+      // Detectar modo preview desde URL
+      const urlParams = new URLSearchParams(window.location.search)
+      const isPreview = urlParams.get('preview') === 'true'
       
       // Determinar si es acceso por token o slug
-      const url = token 
-        ? `/api/gallery/${token}` 
+      const baseUrl = token
+        ? `/api/gallery/${token}`
         : `/api/collections/${slug}`
       
+      // Agregar parámetro preview si está activo
+      const url = isPreview ? `${baseUrl}?preview=true` : baseUrl
       const response = await fetch(url)
       
       if (!response.ok) {
@@ -199,6 +212,29 @@ const stored = localStorage.getItem(`favorites_${slug || token}`)
       console.error('Error loading favorites:', error)
     }
 }, [slug, token])
+
+  // Obtener usuario actual y verificar permisos
+  useEffect(() => {
+    const userStr = localStorage.getItem('user')
+    const token = localStorage.getItem('auth-token')
+    
+    if (userStr && token) {
+      try {
+        const user = JSON.parse(userStr)
+        setCurrentUser(user)
+        setIsAdmin(user.role === 'SUPER_ADMIN' || user.role === 'PHOTOGRAPHER')
+      } catch (error) {
+        console.error('Error parsing user:', error)
+      }
+    }
+  }, [])
+
+  // Verificar si es owner cuando se carga la colección
+  useEffect(() => {
+    if (collection && currentUser) {
+      setIsOwner(collection.ownerId === currentUser.id)
+    }
+  }, [collection, currentUser])
 
   useEffect(() => {
     fetchCollection()
@@ -462,6 +498,47 @@ localStorage.setItem(`favorites_${slug || token}`, JSON.stringify(Array.from(new
       setDownloadingFavorites(false)
     }
   }
+
+  const togglePhotoHidden = async (photoId: string, currentHiddenState: boolean) => {
+    try {
+      const token = localStorage.getItem('auth-token')
+      if (!token) {
+        alert('Debes iniciar sesión para ocultar fotos')
+        return
+      }
+
+      const endpoint = currentHiddenState 
+        ? `/api/photos/${photoId}/unhide`
+        : `/api/photos/${photoId}/hide`
+
+      const response = await fetch(endpoint, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to toggle photo visibility')
+      }
+
+      // Actualizar estado local
+      setPhotos(prevPhotos => 
+        prevPhotos.map(photo => 
+          photo.id === photoId 
+            ? { ...photo, isHidden: !currentHiddenState }
+            : photo
+        )
+      )
+
+      console.log(`✅ Photo ${currentHiddenState ? 'unhidden' : 'hidden'} successfully`)
+    } catch (error) {
+      console.error('Error toggling photo visibility:', error)
+      alert('Error al cambiar la visibilidad de la foto')
+    }
+  }
+
 
 const downloadAllZips = async (urls: string[]) => {
   const zipUrls = urls.map((url: string) => url.trim());
@@ -1512,6 +1589,12 @@ handleDownloadAllProfessional()
                   loading="lazy"
                 />
                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-all pointer-events-none"></div>
+                {/* Badge "Oculta" para admins */}
+                {(isOwner || isAdmin) && photo.isHidden && (
+                  <div className="absolute top-3 left-3 px-2 py-1 bg-red-500 text-white text-xs font-semibold rounded z-10">
+                    Oculta
+                  </div>
+                )}
                 
                 <div className="absolute bottom-3 left-3 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2 z-10">
                   <button
@@ -1539,6 +1622,23 @@ handleDownloadAllProfessional()
                   >
                     <Share2 className="w-4 h-4 text-gray-700" />
                   </button>
+                  {/* Botón Ocultar/Mostrar (Owner o Admin) */}
+                  {(isOwner || isAdmin) && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        togglePhotoHidden(photo.id, photo.isHidden || false);
+                      }}
+                      className="p-2 bg-white/90 backdrop-blur-sm rounded-full hover:bg-white transition-all shadow-lg"
+                      title={photo.isHidden ? "Mostrar foto" : "Ocultar foto"}
+                    >
+                      {photo.isHidden ? (
+                        <Eye className="w-4 h-4 text-gray-700" />
+                      ) : (
+                        <EyeOff className="w-4 h-4 text-gray-700" />
+                      )}
+                    </button>
+                  )}
                 </div>
 
                 <button

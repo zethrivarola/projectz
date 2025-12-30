@@ -17,7 +17,10 @@ export async function GET(
         collection: {
           include: {
             photos: {
-              where: { processingStatus: 'completed' },
+where: {
+  processingStatus: 'completed',
+  isHidden: false  // Siempre ocultar fotos hidden en enlaces compartidos
+},
               orderBy: { orderIndex: 'asc' },
               select: {
                 id: true,
@@ -32,7 +35,8 @@ export async function GET(
                 isRaw: true,
                 orderIndex: true,
                 isStarred: true,
-                processingStatus: true,
+                isHidden: true,  
+              processingStatus: true,
                 createdAt: true,
               }
             },

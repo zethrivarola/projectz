@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // Obtener collections del cliente
+    // Obtener collections del cliente (SIN filtrar fotos ocultas - el cliente las ocultó)
     const collections = await prisma.collection.findMany({
       where: {
         ownerId: payload.userId,
@@ -27,11 +27,14 @@ export async function GET(request: NextRequest) {
           select: {
             id: true,
             thumbnailUrl: true,
-            webUrl: true
+            webUrl: true,
+            isHidden: true  // Incluir flag para mostrar badge si está oculta
           }
         },
         _count: {
-          select: { photos: true }
+          select: { 
+            photos: true  // Contar TODAS las fotos (incluidas ocultas)
+          }
         }
       },
       orderBy: {

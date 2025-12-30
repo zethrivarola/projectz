@@ -132,7 +132,10 @@ model Photo {
   focalPoint          Json?            @map("focal_point")
   orderIndex          Int              @default(0) @map("order_index")
   isStarred           Boolean          @default(false) @map("is_starred")
-  processingStatus    ProcessingStatus @default(pending) @map("processing_status")
+isHidden            Boolean          @default(false) @map("is_hidden")
+  hiddenBy            String?          @map("hidden_by")
+  hiddenAt            DateTime?        @map("hidden_at")  
+processingStatus    ProcessingStatus @default(pending) @map("processing_status")
   thumbnailUrl        String?          @map("thumbnail_url")
   webUrl              String?          @map("web_url")
   highResUrl          String?          @map("high_res_url")
@@ -152,6 +155,7 @@ model Photo {
   @@index([collectionId])
   @@index([processingStatus])
   @@map("photos")
+@@index([isHidden])
 }
 
 model PhotoSet {

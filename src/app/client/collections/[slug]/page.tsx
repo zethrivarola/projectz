@@ -1,0 +1,234 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { useRouter, useParams } from "next/navigation"
+import Link from "next/link"
+import { Camera, Eye, EyeOff, ExternalLink, ArrowLeft, Loader2 } from "lucide-react"
+import { Button } from "@/components/ui/button"
+
+interface Photo {
+  id: string
+  filename: string
+  originalFilename: string
+  thumbnailUrl: string
+  webUrl: string
+  isHidden: boolean
+  width?: number
+  height?: number
+}
+
+interface Collection {
+  id: string
+  slug: string
+  title: string
+  description?: string
+  coverPhoto?: {
+    thumbnailUrl: string
+  }
+}
+
+export default function ClientCollectionPage() {
+  const router = useRouter()
+  const params = useParams()
+  const slug = params.slug as string
+
+  const [collection, setCollection] = useState<Collection | null>(null)
+  const [photos, setPhotos] = useState<Photo[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+
+  useEffect(() => {
+    fetchCollection()
+  }, [slug])
+
+  async function fetchCollection() {
+    try {
+      setLoading(true)
+      const token = localStorage.getItem('auth-token')
+      
+      const response = await fetch(`/api/collections/${slug}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch collection')
+      }
+
+      const data = await response.json()
+      setCollection(data.collection)
+      setPhotos(data.photos || [])
+    } catch (error) {
+      console.error('Error:', error)
+      setError('Error al cargar la colección')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function togglePhotoHidden(photoId: string, currentHiddenState: boolean) {
+    try {
+      const token = localStorage.getItem('auth-token')
+      const endpoint = currentHiddenState 
+        ? `/api/photos/${photoId}/unhide`
+        : `/api/photos/${photoId}/hide`
+
+      const response = await fetch(endpoint, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to toggle photo visibility')
+      }
+
+      // Actualizar estado local
+      setPhotos(prevPhotos => 
+        prevPhotos.map(photo => 
+          photo.id === photoId 
+            ? { ...photo, isHidden: !currentHiddenState }
+            : photo
+        )
+      )
+
+      console.log(`✅ Photo ${currentHiddenState ? 'mostrada' : 'ocultada'} exitosamente`)
+    } catch (error) {
+      console.error('Error toggling photo visibility:', error)
+      alert('Error al cambiar la visibilidad de la foto')
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 animate-spin text-blue-600 mx-auto mb-4" />
+          <p className="text-gray-600">Cargando galería...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !collection) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50">
+        <div className="text-center">
+          <p className="text-red-600 mb-4">{error || 'Colección no encontrada'}</p>
+          <Button onClick={() => router.push('/client/dashboard')}>
+            Volver al Dashboard
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  const visiblePhotos = photos.filter(p => !p.isHidden)
+  const hiddenPhotos = photos.filter(p => p.isHidden)
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      {/* Header */}
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center gap-4">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => router.push('/client/dashboard')}
+              >
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Volver
+              </Button>
+              <div className="flex items-center gap-3">
+                <Camera className="h-5 w-5 text-blue-600" />
+                <div>
+                  <h1 className="text-lg font-bold text-gray-900">{collection.title}</h1>
+                  <p className="text-xs text-gray-500">
+                    {visiblePhotos.length} visible{visiblePhotos.length !== 1 ? 's' : ''} • {hiddenPhotos.length} oculta{hiddenPhotos.length !== 1 ? 's' : ''}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <Link
+              href={`/collections/${slug}?preview=true`}
+              target="_blank"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Ver Preview
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Info Card */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-8">
+          <h2 className="font-semibold text-blue-900 mb-2">💡 ¿Cómo ocultar fotos?</h2>
+          <ul className="text-sm text-blue-800 space-y-1">
+            <li>• Pasa el cursor sobre una foto para ver las opciones</li>
+            <li>• Click en el ícono 👁️ para ocultar/mostrar</li>
+            <li>• Las fotos ocultas NO aparecerán en el preview público ni cuando compartas la galería</li>
+            <li>• Puedes des-ocultarlas en cualquier momento</li>
+          </ul>
+        </div>
+
+        {photos.length === 0 ? (
+          <div className="text-center py-16">
+            <Camera className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+            <p className="text-gray-600">Esta galería no tiene fotos aún</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            {photos.map((photo) => (
+              <div
+                key={photo.id}
+                className="relative group aspect-square bg-gray-100 rounded-lg overflow-hidden"
+              >
+                {/* Imagen */}
+                <img
+                  src={photo.webUrl}
+                  alt={photo.originalFilename}
+                  className="w-full h-full object-cover"
+                />
+
+                {/* Badge "Oculta" */}
+                {photo.isHidden && (
+                  <div className="absolute top-2 left-2 px-2 py-1 bg-red-500 text-white text-xs font-semibold rounded z-10">
+                    Oculta
+                  </div>
+                )}
+
+                {/* Botón Ocultar/Mostrar */}
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center">
+                  <button
+                    onClick={() => togglePhotoHidden(photo.id, photo.isHidden)}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-3 bg-white rounded-full hover:bg-gray-100 shadow-lg"
+                    title={photo.isHidden ? "Mostrar foto" : "Ocultar foto"}
+                  >
+                    {photo.isHidden ? (
+                      <Eye className="w-6 h-6 text-gray-700" />
+                    ) : (
+                      <EyeOff className="w-6 h-6 text-gray-700" />
+                    )}
+                  </button>
+                </div>
+
+                {/* Nombre de archivo */}
+                <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/60 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <p className="text-white text-xs truncate">{photo.originalFilename}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </main>
+    </div>
+  )
+}

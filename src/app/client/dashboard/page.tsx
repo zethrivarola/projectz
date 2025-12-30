@@ -160,7 +160,7 @@ const [user, setUser] = useState<User | null>(null)
               {collections.map((collection) => (
                 <Link
                   key={collection.id}
-                  href={`/collections/${collection.slug}`}
+                  href={`/client/collections/${collection.slug}`}
                   className="group block bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-200"
                 >
                   {/* Cover Image */}

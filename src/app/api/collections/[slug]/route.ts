@@ -31,6 +31,9 @@ export async function GET(
     const cookieToken = request.cookies.get('auth-token')?.value
     const token = bearerToken || cookieToken
 
+    // Verificar si es modo preview (no mostrar fotos ocultas)
+    const url = new URL(request.url)
+    const isPreviewMode = url.searchParams.get('preview') === 'true'
     console.log(`🔍 GET Collection by slug: ${slug}`)
 
     // Try to verify token (optional for public collections)
@@ -38,13 +41,29 @@ export async function GET(
     if (token) {
       payload = AuthService.verifyToken(token)
     }
+// Primero obtener ownerId para verificar permisos
+    const collectionBasic = await prisma.collection.findUnique({
+      where: { slug },
+      select: { ownerId: true }
+    })
 
-    // Get collection with photos
+    // Verificar si puede ver fotos ocultas (admin o owner)
+    const isOwnerForPhotos = payload && collectionBasic?.ownerId === payload.userId
+    const canSeeHidden = !isPreviewMode && payload && (
+      payload.role === 'SUPER_ADMIN' || 
+      payload.role === 'PHOTOGRAPHER' ||
+      isOwnerForPhotos
+    )
+    
+// Get collection with photos
     const collection = await prisma.collection.findUnique({
       where: { slug },
       include: {
         photos: {
-          where: { processingStatus: 'completed' },
+ where: { 
+            processingStatus: 'completed',
+            ...(canSeeHidden ? {} : { isHidden: false })
+          },
           orderBy: { orderIndex: 'asc' },
           select: {
             id: true,
@@ -60,7 +79,8 @@ export async function GET(
             isRaw: true,
             orderIndex: true,
             isStarred: true,
-            processingStatus: true,
+isHidden: true,            
+processingStatus: true,
             createdAt: true,
           }
         },
