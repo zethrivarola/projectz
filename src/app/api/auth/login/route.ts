@@ -6,7 +6,7 @@ import { z } from 'zod'
 const LoginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
-  requiredRole: z.enum(['SUPER_ADMIN', 'PHOTOGRAPHER']).optional()
+  requiredRole: z.enum(['SUPER_ADMIN', 'PHOTOGRAPHER', 'CLIENT']).optional()
 })
 
 export async function POST(request: NextRequest) {
