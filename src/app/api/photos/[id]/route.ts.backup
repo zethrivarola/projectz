@@ -67,6 +67,7 @@ export async function GET(
         exifData: photo.exifData,
         focalPoint: photo.focalPoint,
         orderIndex: photo.orderIndex,
+        isStarred: photo.isStarred,
         processingStatus: photo.processingStatus,
         thumbnailUrl: photo.thumbnailUrl,
         webUrl: photo.webUrl,

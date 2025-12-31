@@ -57,6 +57,7 @@ export async function GET(
             description: true,
             visibility: true,
             isFeatured: true,
+            isStarred: true,
             dateTaken: true,
             createdAt: true,
             coverPhoto: {

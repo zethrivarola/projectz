@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { AuthService } from '@/lib/auth'
+import { canAccessResource } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 
@@ -10,7 +11,6 @@ const UpdateCollectionSchema = z.object({
   password: z.string().optional(),
   tags: z.array(z.string()).optional(),
   dateTaken: z.string().datetime().optional(),
-  isStarred: z.boolean().optional(),
   isFeatured: z.boolean().optional(),
 })
 
@@ -78,7 +78,6 @@ export async function GET(
             height: true,
             isRaw: true,
             orderIndex: true,
-            isStarred: true,
 isHidden: true,            
 processingStatus: true,
             createdAt: true,
@@ -128,7 +127,6 @@ processingStatus: true,
         createdAt: collection.createdAt,
         updatedAt: collection.updatedAt,
         visibility: collection.visibility,
-        isStarred: collection.isStarred,
         isFeatured: collection.isFeatured,
         _count: collection._count,
         design: {
@@ -198,8 +196,13 @@ export async function PATCH(
       return NextResponse.json({ error: 'Collection not found' }, { status: 404 })
     }
 
-    const userIsAdmin = isAdmin(payload.role)
-    if (existingCollection.ownerId !== payload.userId && !userIsAdmin) {
+    // Use canAccessResource for hierarchical permission check
+    const hasAccess = canAccessResource({
+      userRole: payload.role,
+      userId: payload.userId,
+      resourceOwnerId: existingCollection.ownerId ?? undefined,
+    })
+    if (!hasAccess) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
@@ -221,7 +224,6 @@ export async function PATCH(
         passwordHash,
         tags: data.tags,
         dateTaken: data.dateTaken ? new Date(data.dateTaken) : undefined,
-        isStarred: data.isStarred,
         isFeatured: data.isFeatured,
         updatedAt: new Date()
       },
@@ -240,7 +242,6 @@ export async function PATCH(
       description: updatedCollection.description,
       slug: updatedCollection.slug,
       visibility: updatedCollection.visibility,
-      isStarred: updatedCollection.isStarred,
       isFeatured: updatedCollection.isFeatured,
       tags: updatedCollection.tags,
       dateTaken: updatedCollection.dateTaken,
@@ -267,51 +268,58 @@ export async function PATCH(
 }
 
 // DELETE /api/collections/[slug] - Delete collection (ADMIN ONLY)
+// DELETE /api/collections/[slug] - Delete collection
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
     const { slug } = await params
-    const authHeader = request.headers.get('authorization')
-    const bearerToken = authHeader?.replace('Bearer ', '')
-    const cookieToken = request.cookies.get('auth-token')?.value
+    const authHeader = request.headers.get("authorization")
+    const bearerToken = authHeader?.replace("Bearer ", "")
+    const cookieToken = request.cookies.get("auth-token")?.value
     const token = bearerToken || cookieToken
 
-    console.log(`🔍 DELETE Collection: ${slug}`)
+    console.log(`🗑️ DELETE Collection: ${slug}`)
 
     if (!token) {
-      console.log('❌ No token provided')
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const payload = AuthService.verifyToken(token)
     if (!payload) {
-      console.log('❌ Invalid token')
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
     }
 
     console.log(`👤 User attempting delete: ${payload.email} (role: ${payload.role})`)
 
-    // Check if collection exists and user owns it
+    // Check if collection exists
     const collection = await prisma.collection.findUnique({
       where: { slug },
       include: {
-        photos: true
+        photos: true,
+        owner: {
+          select: { createdById: true }
+        }
       }
     })
 
     if (!collection) {
-      console.log('❌ Collection not found')
-      return NextResponse.json({ error: 'Collection not found' }, { status: 404 })
+      console.log("❌ Collection not found")
+      return NextResponse.json({ error: "Collection not found" }, { status: 404 })
     }
 
-    const userIsAdmin = isAdmin(payload.role)
-    console.log(`🔐 Admin check: ${userIsAdmin}, Owner check: ${collection.ownerId === payload.userId}`)
+    // Use hierarchical permission check
+    const hasAccess = canAccessResource({
+      userRole: payload.role,
+      userId: payload.userId,
+      resourceOwnerId: collection.ownerId ?? undefined,
+      resourceOwnerCreatedBy: collection.owner?.createdById,
+    })
 
-    if (collection.ownerId !== payload.userId && !userIsAdmin) {
-      console.log('❌ Access denied - Not owner or admin')
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    if (!hasAccess) {
+      console.log("❌ Access denied - Not owner or admin")
+      return NextResponse.json({ error: "Access denied" }, { status: 403 })
     }
 
     // Delete collection (cascade will delete photos)
@@ -322,14 +330,14 @@ export async function DELETE(
     console.log(`✅ Collection deleted: ${collection.title} (${collection.photos.length} photos)`)
 
     return NextResponse.json({
-      message: 'Collection deleted successfully',
+      message: "Collection deleted successfully",
       deletedPhotos: collection.photos.length
     })
 
   } catch (error) {
-    console.error('❌ DELETE Collection error:', error)
+    console.error("❌ DELETE Collection error:", error)
     return NextResponse.json(
-      { error: 'Failed to delete collection', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: "Failed to delete collection", details: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }
     )
   }

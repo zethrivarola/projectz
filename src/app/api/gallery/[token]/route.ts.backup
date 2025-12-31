@@ -34,6 +34,7 @@ where: {
                 height: true,
                 isRaw: true,
                 orderIndex: true,
+                isStarred: true,
                 isHidden: true,  
               processingStatus: true,
                 createdAt: true,
@@ -179,6 +180,7 @@ export async function POST(
                 height: true,
                 isRaw: true,
                 orderIndex: true,
+                isStarred: true,
                 processingStatus: true,
                 createdAt: true,
               }

@@ -52,11 +52,14 @@ const collection = await prisma.collection.findUnique({
       resourceOwnerCreatedBy: collection.owner?.createdById
     })
 
+    console.log("🔑 hasAccess result:", hasAccess)
+    console.log("📊 Permission check:", { userRole: payload.role, userId: payload.userId, resourceOwnerId: collection.ownerId })
     if (!hasAccess) {
       console.log('Access denied - User:', payload.email, 'Role:', payload.role)
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
+    console.log("🔍 Searching for photo ID:", id)
     const photo = await prisma.photo.findUnique({
       where: { id },
       select: {

@@ -70,7 +70,6 @@ model Collection {
   visibility                String               @default("public") @map("visibility") // "public" | "private" | "password_protected"
   isVisible                 Boolean              @default(true) @map("is_visible")
   passwordHash              String?              @map("password_hash")
-  isStarred                 Boolean              @default(false) @map("is_starred")
   isFeatured                Boolean              @default(false) @map("is_featured")
   dateTaken                 DateTime?            @map("date_taken")
   tags                      String[]
@@ -131,7 +130,6 @@ model Photo {
   exifData            Json?            @map("exif_data")
   focalPoint          Json?            @map("focal_point")
   orderIndex          Int              @default(0) @map("order_index")
-  isStarred           Boolean          @default(false) @map("is_starred")
 isHidden            Boolean          @default(false) @map("is_hidden")
   hiddenBy            String?          @map("hidden_by")
   hiddenAt            DateTime?        @map("hidden_at")  

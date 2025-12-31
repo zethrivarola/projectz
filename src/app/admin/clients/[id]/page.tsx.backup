@@ -20,6 +20,7 @@ interface Collection {
   description?: string
   visibility: string
   isFeatured: boolean
+  isStarred: boolean
   dateTaken?: string
   createdAt: string
   totalSizeBytes: string
@@ -160,7 +161,7 @@ export default function ClientDetailPage() {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ isFeatured: !collection.isFeatured })
+        body: JSON.stringify({ isStarred: !collection.isStarred })
       })
 
       if (!response.ok) throw new Error('Failed to update collection')
@@ -434,7 +435,7 @@ export default function ClientDetailPage() {
                     }}
                     className="absolute top-3 left-3 z-10"
                   >
-                    <Star className={`h-3 w-3 ${collection.isFeatured ? 'fill-current' : ''}`} />
+                    <Star className={`h-3 w-3 ${collection.isStarred ? 'fill-current' : ''}`} />
                   </Button>
                 </div>
 

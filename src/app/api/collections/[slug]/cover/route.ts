@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { AuthService } from '@/lib/auth'
+import { AuthService, canAccessResource } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 
@@ -22,7 +22,7 @@ export async function POST(
 ) {
   try {
     const { slug } = await params
-    
+
     const authHeader = request.headers.get('authorization')
     const bearerToken = authHeader?.replace('Bearer ', '')
     const cookieToken = request.cookies.get('auth-token')?.value
@@ -45,7 +45,15 @@ export async function POST(
     // Get collection to verify ownership
     const collection = await prisma.collection.findUnique({
       where: { slug },
-      select: { id: true, ownerId: true }
+      select: { 
+        id: true, 
+        ownerId: true,
+        owner: {
+          select: {
+            createdById: true
+          }
+        }
+      }
     })
 
     if (!collection) {
@@ -53,7 +61,16 @@ export async function POST(
       return NextResponse.json({ error: 'Collection not found' }, { status: 404 })
     }
 
-    if (collection.ownerId !== payload.userId && payload.role !== 'admin') {
+    // Use hierarchical permission check
+    const hasAccess = canAccessResource({
+      userRole: payload.role,
+      userId: payload.userId,
+      resourceOwnerId: collection.ownerId ?? undefined,
+      resourceOwnerCreatedBy: collection.owner?.createdById,
+    })
+
+    if (!hasAccess) {
+      console.log(`❌ Access denied for user ${payload.userId}`)
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
@@ -128,7 +145,7 @@ export async function DELETE(
 ) {
   try {
     const { slug } = await params
-    
+
     const authHeader = request.headers.get('authorization')
     const bearerToken = authHeader?.replace('Bearer ', '')
     const cookieToken = request.cookies.get('auth-token')?.value
@@ -148,14 +165,30 @@ export async function DELETE(
     // Get collection to verify ownership
     const collection = await prisma.collection.findUnique({
       where: { slug },
-      select: { id: true, ownerId: true }
+      select: { 
+        id: true, 
+        ownerId: true,
+        owner: {
+          select: {
+            createdById: true
+          }
+        }
+      }
     })
 
     if (!collection) {
       return NextResponse.json({ error: 'Collection not found' }, { status: 404 })
     }
 
-    if (collection.ownerId !== payload.userId && payload.role !== 'admin') {
+    // Use hierarchical permission check
+    const hasAccess = canAccessResource({
+      userRole: payload.role,
+      userId: payload.userId,
+      resourceOwnerId: collection.ownerId ?? undefined,
+      resourceOwnerCreatedBy: collection.owner?.createdById,
+    })
+
+    if (!hasAccess) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 

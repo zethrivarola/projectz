@@ -16,6 +16,7 @@ const CreateCollectionSchema = z.object({
   tags: z.array(z.string()).default([]),
   dateTaken: z.string().datetime().optional(),
   isFeatured: z.boolean().default(false),
+  isStarred: z.boolean().default(false),
 })
 
 // GET /api/collections - List collections
@@ -49,7 +50,7 @@ export async function GET(request: NextRequest) {
     // Build where clause
     interface CollectionWhere {
       ownerId?: string
-      isFeatured?: boolean
+      isStarred?: boolean
       visibility?: string | { in: string[] }
       OR?: Array<{
         title?: { contains: string; mode: 'insensitive' }
@@ -62,7 +63,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (starred) {
-      where.isFeatured = true
+      where.isStarred = true
     }
 
     if (search) {
@@ -204,6 +205,7 @@ export async function POST(request: NextRequest) {
         tags: data.tags,
         dateTaken: data.dateTaken ? new Date(data.dateTaken) : null,
         isFeatured: data.isFeatured,
+        isStarred: data.isStarred,
       },
       include: {
         coverPhoto: {

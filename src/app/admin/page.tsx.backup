@@ -46,7 +46,7 @@ interface FilterState {
   eventDateTo: Date | null
   entryDateFrom: Date | null
   entryDateTo: Date | null
-  featured: boolean
+  starred: boolean
 }
 
 export default function AdminDashboard() {
@@ -73,7 +73,7 @@ export default function AdminDashboard() {
     eventDateTo: null,
     entryDateFrom: null,
     entryDateTo: null,
-    featured: false
+    starred: false
   })
 // Helper para formatear bytes a GB/MB
   const formatSize = (sizeBytes: string | undefined) => {
@@ -222,7 +222,7 @@ const handleToggleStar = async (collection: Collection) => {
       method: 'PATCH',
       headers: getAuthHeaders(),
       credentials: 'include',
-      body: JSON.stringify({ isFeatured: !collection.isFeatured })
+      body: JSON.stringify({ isStarred: !collection.isStarred })
     })
 
     if (!response.ok) {
@@ -231,7 +231,7 @@ const handleToggleStar = async (collection: Collection) => {
 
     setCollections(prev => prev.map(c => 
       c.id === collection.id 
-        ? { ...c, isFeatured: !c.isFeatured } 
+        ? { ...c, isStarred: !c.isStarred } 
         : c
     ))
   } catch (error) {
@@ -257,7 +257,7 @@ const handleToggleStar = async (collection: Collection) => {
       eventDateTo: null,
       entryDateFrom: null,
       entryDateTo: null,
-      featured: false
+      starred: false
     })
   }
 
@@ -288,7 +288,7 @@ const handleToggleStar = async (collection: Collection) => {
       return false
     }
 
-    if (filters.featured && !collection.isFeatured) {
+    if (filters.starred && !collection.isStarred) {
       return false
     }
 
@@ -315,7 +315,7 @@ const handleToggleStar = async (collection: Collection) => {
     filters.eventDateTo || 
     filters.entryDateFrom || 
     filters.entryDateTo || 
-    filters.featured
+    filters.starred
 
   const formatDate = (date: Date) => {
     return new Date(date).toLocaleDateString('en-US', {
@@ -472,12 +472,12 @@ const handleToggleStar = async (collection: Collection) => {
 
               {/* Starred */}
               <Button
-                variant={filters.featured ? "default" : "outline"}
+                variant={filters.starred ? "default" : "outline"}
                 size="sm"
-                onClick={() => updateFilters({ featured: !filters.featured })}
+                onClick={() => updateFilters({ starred: !filters.starred })}
                 className="gap-2"
               >
-                <Star className={`h-4 w-4 ${filters.featured ? 'fill-current' : ''}`} />
+                <Star className={`h-4 w-4 ${filters.starred ? 'fill-current' : ''}`} />
               </Button>
 
               {/* Clear Filters */}
@@ -586,10 +586,10 @@ const handleToggleStar = async (collection: Collection) => {
     e.stopPropagation()
     handleToggleStar(collection)
   }}
-  title={collection.isFeatured ? "Remove from starred" : "Add to starred"}
+  title={collection.isStarred ? "Remove from starred" : "Add to starred"}
   className="absolute top-3 left-3 z-10"
 >
-  <Star className={`h-3 w-3 ${collection.isFeatured ? 'fill-current' : ''}`} />
+  <Star className={`h-3 w-3 ${collection.isStarred ? 'fill-current' : ''}`} />
 </Button>
                   </div>
 

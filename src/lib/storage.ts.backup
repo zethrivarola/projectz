@@ -15,6 +15,7 @@ interface Collection {
   slug: string
   ownerId: string
   visibility: string
+  isStarred: boolean
   isFeatured: boolean
   tags: string[]
   dateTaken?: Date | null

@@ -52,6 +52,7 @@ export interface CollectionApiResponse {
   description?: string | null
   ownerId?: string | null
   visibility: string
+  isStarred: boolean
   isFeatured: boolean
   isVisible: boolean
   tags: string[]
@@ -95,6 +96,7 @@ export interface CollectionFrontend {
   description?: string
   ownerId?: string
   visibility: string
+  isStarred: boolean
   isFeatured: boolean
   isVisible: boolean
   tags: string[]
@@ -269,6 +271,7 @@ export function collectionToApiResponse(
     description: collection.description,
     ownerId: collection.ownerId,
     visibility: collection.visibility,
+    isStarred: collection.isStarred,
     isFeatured: collection.isFeatured,
     isVisible: collection.isVisible,
     tags: collection.tags,
@@ -305,6 +308,7 @@ export function apiResponseToFrontend(
     description: collection.description ?? undefined,
     ownerId: collection.ownerId ?? undefined,
     visibility: collection.visibility,
+    isStarred: collection.isStarred,
     isFeatured: collection.isFeatured,
     isVisible: collection.isVisible,
     tags: collection.tags,

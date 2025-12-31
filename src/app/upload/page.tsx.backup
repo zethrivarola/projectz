@@ -15,6 +15,7 @@ interface Collection {
   description?: string
   slug: string
   visibility: 'public' | 'private' | 'password_protected'
+  isStarred: boolean
   isFeatured: boolean
   tags: string[]
   createdAt: string | Date

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { AuthService } from '@/lib/auth'
+import { canAccessResource } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 
@@ -14,6 +15,11 @@ const UpdateCollectionSchema = z.object({
   isFeatured: z.boolean().optional(),
 })
 
+// Helper para verificar si es admin (solo SUPER_ADMIN)
+function isAdmin(role: string): boolean {
+  return role === 'SUPER_ADMIN'
+}
+
 // GET /api/collections/[slug] - Get single collection with photos (PUBLIC + ADMIN)
 export async function GET(
   request: NextRequest,
@@ -26,6 +32,9 @@ export async function GET(
     const cookieToken = request.cookies.get('auth-token')?.value
     const token = bearerToken || cookieToken
 
+    // Verificar si es modo preview (no mostrar fotos ocultas)
+    const url = new URL(request.url)
+    const isPreviewMode = url.searchParams.get('preview') === 'true'
     console.log(`🔍 GET Collection by slug: ${slug}`)
 
     // Try to verify token (optional for public collections)
@@ -33,19 +42,35 @@ export async function GET(
     if (token) {
       payload = AuthService.verifyToken(token)
     }
+// Primero obtener ownerId para verificar permisos
+    const collectionBasic = await prisma.collection.findUnique({
+      where: { slug },
+      select: { ownerId: true }
+    })
 
-    // Get collection with photos
+    // Verificar si puede ver fotos ocultas (admin o owner)
+    const isOwnerForPhotos = payload && collectionBasic?.ownerId === payload.userId
+    const canSeeHidden = !isPreviewMode && payload && (
+      payload.role === 'SUPER_ADMIN' || 
+      payload.role === 'PHOTOGRAPHER' ||
+      isOwnerForPhotos
+    )
+    
+// Get collection with photos
     const collection = await prisma.collection.findUnique({
       where: { slug },
       include: {
         photos: {
-          where: { processingStatus: 'completed' },
+ where: { 
+            processingStatus: 'completed',
+            ...(canSeeHidden ? {} : { isHidden: false })
+          },
           orderBy: { orderIndex: 'asc' },
           select: {
             id: true,
             filename: true,
             originalFilename: true,
-            fileSize: true,          
+            fileSize: true,
             thumbnailUrl: true,
             webUrl: true,
             highResUrl: true,
@@ -55,7 +80,8 @@ export async function GET(
             isRaw: true,
             orderIndex: true,
             isStarred: true,
-            processingStatus: true,
+isHidden: true,            
+processingStatus: true,
             createdAt: true,
           }
         },
@@ -79,56 +105,56 @@ export async function GET(
 
     // Check access permissions
     const isOwner = payload && collection.ownerId === payload.userId
-    const isAdmin = payload && payload.role === 'admin'
+    const userIsAdmin = payload && isAdmin(payload.role)
     const isPublic = collection.visibility === 'public'
 
     // If not public and user is not owner/admin, deny access
-    if (!isPublic && !isOwner && !isAdmin) {
+    if (!isPublic && !isOwner && !userIsAdmin) {
       console.log(`❌ Access denied: Collection is ${collection.visibility}`)
       return NextResponse.json({ error: 'This collection is private' }, { status: 403 })
     }
 
     console.log(`✅ Collection found: ${collection.title} with ${collection.photos.length} photos`)
 
-    // Return in gallery format (matching the shared gallery structure)
+    // Return in gallery format
     return NextResponse.json({
-  collection: {
-    id: collection.id,
-    title: collection.title,
-    description: collection.description,
-    slug: collection.slug,
-    coverPhoto: collection.coverPhoto,
-    tags: collection.tags,
-    dateTaken: collection.dateTaken,
-    createdAt: collection.createdAt,
-    updatedAt: collection.updatedAt,
-    visibility: collection.visibility,
-    isStarred: collection.isStarred,
-    isFeatured: collection.isFeatured,
-    _count: collection._count,
-    design: {
-      coverLayout: collection.coverLayout || 'center',
-      typography: {
-        titleFont: collection.typographyStyle || 'Inter',
-        titleSize: collection.titleSize || 48,
-        titleColor: collection.titleColor || '#ffffff'
+      collection: {
+        id: collection.id,
+        title: collection.title,
+        description: collection.description,
+        slug: collection.slug,
+        coverPhoto: collection.coverPhoto,
+        tags: collection.tags,
+        dateTaken: collection.dateTaken,
+        createdAt: collection.createdAt,
+        updatedAt: collection.updatedAt,
+        visibility: collection.visibility,
+        isStarred: collection.isStarred,
+        isFeatured: collection.isFeatured,
+        _count: collection._count,
+        design: {
+          coverLayout: collection.coverLayout || 'center',
+          typography: {
+            titleFont: collection.typographyStyle || 'Inter',
+            titleSize: collection.titleSize || 48,
+            titleColor: collection.titleColor || '#ffffff'
+          },
+          colors: {
+            background: collection.customBackgroundColor || '#ffffff',
+            accent: collection.customAccentColor || '#000000'
+          },
+          grid: {
+            columns: collection.gridColumns || 4,
+            spacing: collection.gridSpacing || 8
+          },
+          coverFocus: collection.coverFocalPoint || { x: 50, y: 50 }
+        }
       },
-      colors: {
-        background: collection.customBackgroundColor || '#ffffff',
-        accent: collection.customAccentColor || '#000000'
-      },
-      grid: {
-        columns: collection.gridColumns || 4,
-        spacing: collection.gridSpacing || 8
-      },
-      coverFocus: collection.coverFocalPoint || { x: 50, y: 50 }
-    }
-  },
- photos: collection.photos.map(photo => ({
-    ...photo,
-    fileSize: photo.fileSize ? Number(photo.fileSize) : undefined
-  }))
-})
+      photos: collection.photos.map(photo => ({
+        ...photo,
+        fileSize: photo.fileSize ? Number(photo.fileSize) : undefined
+      }))
+    })
   } catch (error) {
     console.error('❌ GET Collection error:', error)
     return NextResponse.json(
@@ -173,7 +199,13 @@ export async function PATCH(
       return NextResponse.json({ error: 'Collection not found' }, { status: 404 })
     }
 
-    if (existingCollection.ownerId !== payload.userId && payload.role !== 'admin') {
+    // Use canAccessResource for hierarchical permission check
+    const hasAccess = canAccessResource({
+      userRole: payload.role,
+      userId: payload.userId,
+      resourceOwnerId: existingCollection.ownerId ?? undefined,
+    })
+    if (!hasAccess) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
@@ -241,42 +273,58 @@ export async function PATCH(
 }
 
 // DELETE /api/collections/[slug] - Delete collection (ADMIN ONLY)
+// DELETE /api/collections/[slug] - Delete collection
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
     const { slug } = await params
-    const authHeader = request.headers.get('authorization')
-    const bearerToken = authHeader?.replace('Bearer ', '')
-    const cookieToken = request.cookies.get('auth-token')?.value
+    const authHeader = request.headers.get("authorization")
+    const bearerToken = authHeader?.replace("Bearer ", "")
+    const cookieToken = request.cookies.get("auth-token")?.value
     const token = bearerToken || cookieToken
 
-    console.log(`🔍 DELETE Collection: ${slug}`)
+    console.log(`🗑️ DELETE Collection: ${slug}`)
 
     if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const payload = AuthService.verifyToken(token)
     if (!payload) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
     }
 
-    // Check if collection exists and user owns it
+    console.log(`👤 User attempting delete: ${payload.email} (role: ${payload.role})`)
+
+    // Check if collection exists
     const collection = await prisma.collection.findUnique({
       where: { slug },
       include: {
-        photos: true
+        photos: true,
+        owner: {
+          select: { createdById: true }
+        }
       }
     })
 
     if (!collection) {
-      return NextResponse.json({ error: 'Collection not found' }, { status: 404 })
+      console.log("❌ Collection not found")
+      return NextResponse.json({ error: "Collection not found" }, { status: 404 })
     }
 
-    if (collection.ownerId !== payload.userId && payload.role !== 'admin') {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    // Use hierarchical permission check
+    const hasAccess = canAccessResource({
+      userRole: payload.role,
+      userId: payload.userId,
+      resourceOwnerId: collection.ownerId ?? undefined,
+      resourceOwnerCreatedBy: collection.owner?.createdById,
+    })
+
+    if (!hasAccess) {
+      console.log("❌ Access denied - Not owner or admin")
+      return NextResponse.json({ error: "Access denied" }, { status: 403 })
     }
 
     // Delete collection (cascade will delete photos)
@@ -284,17 +332,17 @@ export async function DELETE(
       where: { slug }
     })
 
-    console.log(`✅ Collection deleted: ${collection.title}`)
+    console.log(`✅ Collection deleted: ${collection.title} (${collection.photos.length} photos)`)
 
-    return NextResponse.json({ 
-      message: 'Collection deleted successfully',
+    return NextResponse.json({
+      message: "Collection deleted successfully",
       deletedPhotos: collection.photos.length
     })
 
   } catch (error) {
-    console.error('❌ DELETE Collection error:', error)
+    console.error("❌ DELETE Collection error:", error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: "Failed to delete collection", details: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }
     )
   }

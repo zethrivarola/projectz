@@ -14,7 +14,7 @@ interface Collection {
   title: string
   description?: string
   slug: string
-  isStarred: boolean
+  isFeatured: boolean
   tags: string[]
   visibility: string
   createdAt: Date
@@ -69,7 +69,7 @@ export default function StarredPage() {
 
       setAuthChecked(true)
 
-      // Fetch all collections and filter starred ones
+      // Fetch all collections and filter featured ones
       const response = await fetch('/api/collections', {
         credentials: 'include',
         headers: getAuthHeaders()
@@ -85,13 +85,13 @@ export default function StarredPage() {
       }
 
       const data = await response.json()
-      // Filter only starred collections
-      const starredCollections = data.collections.filter((c: Collection) => c.isStarred === true)
-      setCollections(starredCollections)
+      // Filter only featured collections
+      const featuredCollections = data.collections.filter((c: Collection) => c.isFeatured === true)
+      setCollections(featuredCollections)
 
     } catch (error) {
-      console.error('Error fetching starred collections:', error)
-      setError(error instanceof Error ? error.message : 'Failed to load starred collections')
+      console.error('Error fetching featured collections:', error)
+      setError(error instanceof Error ? error.message : 'Failed to load featured collections')
     } finally {
       setLoading(false)
     }
@@ -107,14 +107,14 @@ export default function StarredPage() {
         method: 'PATCH',
         headers: getAuthHeaders(),
         credentials: 'include',
-        body: JSON.stringify({ isStarred: !collection.isStarred })
+        body: JSON.stringify({ isFeatured: !collection.isFeatured })
       })
 
       if (!response.ok) {
         throw new Error('Failed to update collection')
       }
 
-      // Remove from starred list (since we're toggling it off)
+      // Remove from featured list (since we're toggling it off)
       setCollections(prev => prev.filter(c => c.id !== collection.id))
     } catch (error) {
       console.error('Error toggling star:', error)
@@ -185,7 +185,7 @@ export default function StarredPage() {
         <div className="flex items-center justify-center h-full">
           <div className="flex items-center gap-2 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" />
-            <span>Loading starred collections...</span>
+            <span>Loading featured collections...</span>
           </div>
         </div>
       </AppLayout>
@@ -224,7 +224,7 @@ export default function StarredPage() {
                 <div className="w-24 h-24 mx-auto mb-6 bg-muted rounded-full flex items-center justify-center">
                   <Star className="h-12 w-12 text-muted-foreground opacity-50" />
                 </div>
-                <h2 className="text-xl font-semibold text-foreground mb-2">You have no starred collections yet</h2>
+                <h2 className="text-xl font-semibold text-foreground mb-2">You have no featured collections yet</h2>
                 <p className="text-muted-foreground mb-6">Track your favorite collections with stars.</p>
                 <Link href="/admin">
                   <Button variant="outline">
@@ -265,7 +265,7 @@ export default function StarredPage() {
                           e.stopPropagation()
                           handleToggleStar(collection)
                         }}
-                        title="Remove from starred"
+                        title="Remove from featured"
                         className="absolute top-3 left-3 z-10"
                       >
                         <Star className="h-3 w-3 fill-yellow-500 text-yellow-500" />
