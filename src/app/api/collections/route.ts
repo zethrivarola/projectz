@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { AuthService } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { collectionToApiResponse, CollectionApiResponse } from '@/lib/types'
 
 function isAdmin(role: string): boolean {
   return role === 'SUPER_ADMIN'
@@ -125,10 +126,11 @@ export async function GET(request: NextRequest) {
           return acc + BigInt(photo.fileSize)
         }, BigInt(0))
 
-        return {
+        // Use transformation function
+        return collectionToApiResponse({
           ...collection,
-          totalSizeBytes: totalSizeBytes.toString(),
-        }
+          totalSizeBytes,
+        })
       })
     )
 
@@ -206,6 +208,21 @@ export async function POST(request: NextRequest) {
         isStarred: data.isStarred,
       },
       include: {
+        coverPhoto: {
+          select: {
+            id: true,
+            thumbnailUrl: true,
+            webUrl: true,
+          }
+        },
+        owner: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            role: true,
+          }
+        },
         _count: {
           select: { photos: true }
         }
@@ -214,8 +231,16 @@ export async function POST(request: NextRequest) {
 
     console.log(`✅ Collection created: ${collection.title} by ${payload.email}`)
 
-    return NextResponse.json({ collection }, { status: 201 })
+    // Use transformation function for consistent response
+    // Transform with explicit _count to ensure it's passed
+    // Transform with explicit _count to ensure it's passed
+    const collectionResponse = collectionToApiResponse({
+      ...collection,
+      _count: collection._count, // Explicitly pass _count
+      totalSizeBytes: BigInt(0), // Nueva colección = 0 bytes
+    })
 
+    return NextResponse.json({ collection: collectionResponse }, { status: 201 })
   } catch (error) {
     console.error('❌ POST Collection error:', error)
 

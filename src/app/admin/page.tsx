@@ -11,6 +11,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { CollectionFrontend, CollectionApiResponse, apiResponseToFrontend } from "@/lib/types"
+// Use centralized type from lib/types
+type Collection = CollectionFrontend
+
 import { NewCollectionDialog } from "@/components/new-collection-dialog"
 import { ShareCollectionDialog } from "@/components/share-collection-dialog"
 import {
@@ -33,31 +37,6 @@ import {
   HardDrive
 } from "lucide-react"
 
-interface Collection {
-  id: string
-  title: string
-  description?: string
-  slug: string
-  isStarred: boolean
-  tags: string[]
-  visibility: string
-  createdAt: Date
-  updatedAt: Date
-  dateTaken?: Date
-  coverPhoto?: {
-    id: string
-    thumbnailUrl: string
-    webUrl: string
-  }
-  coverFocalPoint?: {
-    x: number
-    y: number
-  }
-_count: {
-    photos: number
-  }
-  totalSizeBytes?: string
-}
 
 interface FilterState {
   searchQuery: string
@@ -204,10 +183,16 @@ export default function AdminDashboard() {
     }
   }
 
-  const handleNewCollection = (newCollection: Collection) => {
+  const handleNewCollection = (newCollectionApi: CollectionApiResponse) => {
+    // Transform API response to Frontend format using centralized function
+    const newCollection = apiResponseToFrontend(newCollectionApi)
+    
+    // Add to collections list
     setCollections(prev => [newCollection, ...prev])
-  }
 
+    // Refrescar para asegurar que Next.js tenga la ruta lista
+    router.refresh()
+  }
   const handleDeleteCollection = async (collection: Collection) => {
     if (!confirm(`Are you sure you want to delete "${collection.title}"? This action cannot be undone.`)) {
       return

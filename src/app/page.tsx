@@ -5,6 +5,7 @@ import Link from "next/link"
 import { motion, useScroll, useTransform } from "framer-motion"
 import { Camera, Calendar, ArrowRight, Loader2, Sparkles } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 interface Collection {
   id: string
@@ -90,14 +91,14 @@ export default function HomePage() {
   // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-white dark:from-slate-950 via-gray-50 dark:via-slate-900 to-gray-100 dark:to-slate-950">
         <motion.div 
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           className="flex flex-col items-center gap-4"
         >
-          <Loader2 className="h-12 w-12 animate-spin text-blue-500" />
-          <p className="text-slate-400 font-light tracking-wide">Cargando colecciones...</p>
+          <Loader2 className="h-12 w-12 animate-spin text-blue-600 dark:text-blue-500" />
+          <p className="text-gray-600 dark:text-slate-400 font-light tracking-wide">Cargando colecciones...</p>
         </motion.div>
       </div>
     )
@@ -106,27 +107,27 @@ export default function HomePage() {
   // Error state
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950">
+      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-slate-950">
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="text-center"
         >
           <p className="text-red-500 mb-2 text-lg font-medium">Error al cargar colecciones</p>
-          <p className="text-sm text-slate-500">{error}</p>
+          <p className="text-sm text-gray-500 dark:text-slate-500">{error}</p>
         </motion.div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="min-h-screen bg-white dark:bg-slate-950">
       {/* Header - Dark mode */}
       <motion.header 
         initial={{ y: -100 }}
         animate={{ y: 0 }}
         transition={{ duration: 0.6, ease: "easeOut" }}
-        className="fixed top-0 w-full z-50 border-b border-slate-800/50 bg-slate-950/80 backdrop-blur-xl"
+        className="fixed top-0 w-full z-50 border-b border-gray-200 dark:border-slate-800/50 bg-white/95 dark:bg-slate-950/80 backdrop-blur-xl"
       >
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-20">
@@ -135,23 +136,24 @@ export default function HomePage() {
                 whileHover={{ rotate: 15, scale: 1.1 }}
                 transition={{ type: "spring", stiffness: 400 }}
               >
-                <Camera className="h-8 w-8 text-blue-500" />
+                <Camera className="h-8 w-8 text-blue-600 dark:text-blue-500" />
               </motion.div>
               <div className="flex flex-col">
-                <h1 className="text-xl font-bold tracking-tight text-white group-hover:text-blue-400 transition-colors">
+                <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white group-hover:text-blue-400 transition-colors">
                   RENÉ RIVAROLA
                 </h1>
-                <p className="text-xs text-slate-500 tracking-[0.2em] font-light">
+                <p className="text-xs text-gray-500 dark:text-slate-500 tracking-[0.2em] font-light">
                   PHOTOGRAPHY
                 </p>
               </div>
             </Link>
+            <ThemeToggle />
           </div>
         </div>
       </motion.header>
 
       {/* Hero Section - Slideshow con fotos reales */}
-      <section className="relative h-[70vh] sm:h-[80vh] flex items-center justify-center overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+      <section className="relative h-[70vh] sm:h-[80vh] flex items-center justify-center overflow-hidden bg-gradient-to-br from-white dark:from-slate-950 via-gray-50 dark:via-slate-900 to-gray-100 dark:to-slate-950">
         {/* Slides con fotos reales o gradientes de respaldo */}
         {heroSlides.length > 0 ? (
           heroSlides.map((collection, index) => {
@@ -198,7 +200,7 @@ export default function HomePage() {
           // Gradientes de respaldo si no hay featured collections
           <>
             <motion.div 
-              className="absolute inset-0 bg-gradient-to-br from-blue-950/20 via-slate-900 to-slate-950"
+              className="absolute inset-0 bg-gradient-to-br from-blue-950/20 via-gray-50 dark:via-slate-900 to-gray-100 dark:to-slate-950"
               animate={{ 
                 opacity: currentSlide === 0 ? 1 : 0,
                 scale: currentSlide === 0 ? [1, 1.1, 1] : 1
@@ -245,7 +247,7 @@ export default function HomePage() {
               <span className="text-sm font-medium text-blue-300">Portfolio Profesional</span>
             </motion.div>
 
-            <h2 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-6 text-white">
+            <h2 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-6 text-gray-900 dark:text-white">
               Capturando momentos,
               <br />
               <span className="bg-gradient-to-r from-blue-400 via-cyan-400 to-blue-500 bg-clip-text text-transparent">
@@ -257,7 +259,7 @@ export default function HomePage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.8, delay: 0.6 }}
-              className="text-lg sm:text-xl text-slate-400 max-w-2xl mx-auto mb-8 font-light leading-relaxed"
+              className="text-lg sm:text-xl text-gray-600 dark:text-slate-400 max-w-2xl mx-auto mb-8 font-light leading-relaxed"
             >
               Explora mi colección de fotografías que capturan historias únicas,
               emociones genuinas y momentos inolvidables
@@ -269,7 +271,7 @@ export default function HomePage() {
             >
               <Link
                 href="#collections"
-                className="inline-flex items-center gap-2 px-8 py-4 bg-blue-600 text-white rounded-full font-medium hover:bg-blue-500 transition-all hover:gap-3 group shadow-lg shadow-blue-600/30"
+                className="inline-flex items-center gap-2 px-8 py-4 bg-blue-600 text-gray-900 dark:text-white rounded-full font-medium hover:bg-blue-500 transition-all hover:gap-3 group shadow-lg shadow-blue-600/30"
               >
                 Ver Colecciones
                 <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
@@ -314,7 +316,7 @@ export default function HomePage() {
 
       {/* Carrusel Infinito - Featured Collections CIRCULARES */}
       {featuredCollections.length > 0 && (
-        <section id="collections" className="py-20 sm:py-24 overflow-hidden bg-slate-950">
+        <section id="collections" className="py-20 sm:py-24 overflow-hidden bg-white dark:bg-slate-950">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-8">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -322,10 +324,10 @@ export default function HomePage() {
               viewport={{ once: true }}
               transition={{ duration: 0.6 }}
             >
-              <h3 className="text-3xl sm:text-4xl font-bold mb-2 text-white">
+              <h3 className="text-3xl sm:text-4xl font-bold mb-2 text-gray-900 dark:text-white">
                 ⭐ Colecciones Destacadas
               </h3>
-              <p className="text-slate-400 text-lg">
+              <p className="text-gray-600 dark:text-slate-400 text-lg">
                 Mis trabajos más recientes y premiados
               </p>
             </motion.div>
@@ -388,7 +390,7 @@ export default function HomePage() {
                         </div>
                         
                         {/* Contenido */}
-                        <div className="text-white">
+                        <div className="text-gray-900 dark:text-white">
                           <h4 className="text-2xl font-bold mb-2">{collection.title}</h4>
                           <p className="text-sm opacity-90">
                             {collection._count.photos} fotos
@@ -405,7 +407,7 @@ export default function HomePage() {
         </section>
       )}
       {/* Grid Estático - Todas las colecciones */}
-      <section className="py-20 sm:py-24 lg:py-32 relative bg-slate-950">
+      <section className="py-20 sm:py-24 lg:py-32 relative bg-white dark:bg-slate-950">
         {/* Background pattern sutil */}
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(71,85,105,0.1)_1px,transparent_0)] bg-[size:24px_24px]" />
         
@@ -418,10 +420,10 @@ export default function HomePage() {
             transition={{ duration: 0.6 }}
             className="text-center mb-16"
           >
-            <h3 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4 text-white">
+            <h3 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4 text-gray-900 dark:text-white">
               {regularCollections.length > 0 ? 'Todas las Colecciones' : 'Colecciones'}
             </h3>
-            <p className="text-slate-400 text-lg max-w-2xl mx-auto">
+            <p className="text-gray-600 dark:text-slate-400 text-lg max-w-2xl mx-auto">
               {collections.length > 0 
                 ? `${collections.length} ${collections.length === 1 ? 'colección disponible' : 'colecciones disponibles'}`
                 : 'Próximamente nuevas colecciones'}
@@ -436,11 +438,11 @@ export default function HomePage() {
               transition={{ duration: 0.6 }}
               className="text-center py-24"
             >
-              <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-slate-900/50 mb-6 border border-slate-800">
+              <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-slate-900/50 mb-6 border border-gray-200 dark:border-slate-800">
                 <Camera className="h-12 w-12 text-slate-600" />
               </div>
-              <h3 className="text-2xl font-semibold mb-3 text-white">No hay colecciones disponibles</h3>
-              <p className="text-slate-500 max-w-md mx-auto">
+              <h3 className="text-2xl font-semibold mb-3 text-gray-900 dark:text-white">No hay colecciones disponibles</h3>
+              <p className="text-gray-500 dark:text-slate-500 max-w-md mx-auto">
                 Vuelve pronto para ver nuevas colecciones de fotografía profesional
               </p>
             </motion.div>
@@ -467,9 +469,9 @@ export default function HomePage() {
                       href={`/collections/${collection.slug}`}
                       className="group block"
                     >
-                      <article className="bg-slate-900/50 rounded-2xl overflow-hidden border border-slate-800/50 hover:border-blue-500/50 hover:shadow-2xl hover:shadow-blue-500/10 transition-all duration-500 backdrop-blur-sm">
+                      <article className="bg-slate-900/50 rounded-2xl overflow-hidden border border-gray-200 dark:border-slate-800/50 hover:border-blue-500/50 hover:shadow-2xl hover:shadow-blue-500/10 transition-all duration-500 backdrop-blur-sm">
                         {/* Cover Image con overlay gradient */}
-                        <div className="relative aspect-[4/3] overflow-hidden bg-slate-900">
+                        <div className="relative aspect-[4/3] overflow-hidden bg-gray-100 dark:bg-slate-900">
                           {collection.coverPhoto ? (
                             <>
                               <motion.img
@@ -485,7 +487,7 @@ export default function HomePage() {
                               />
                               
                               {/* Gradient overlay on hover */}
-                              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/0 to-slate-950/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                              <div className="absolute inset-0 bg-gradient-to-t from-white dark:from-slate-950/80 via-slate-950/0 to-gray-100 dark:to-slate-950/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                             </>
                           ) : (
                             <div className="w-full h-full flex items-center justify-center">
@@ -501,7 +503,7 @@ export default function HomePage() {
                               transition={{ duration: 0.3, delay: index * 0.05 + 0.2 }}
                               className="absolute top-4 left-4"
                             >
-                              <Badge className="bg-blue-600/90 backdrop-blur-md text-white shadow-lg shadow-blue-600/50 border border-blue-500/30">
+                              <Badge className="bg-blue-600/90 backdrop-blur-md text-gray-900 dark:text-white shadow-lg shadow-blue-600/50 border border-blue-500/30">
                                 ⭐ Destacado
                               </Badge>
                             </motion.div>
@@ -509,7 +511,7 @@ export default function HomePage() {
 
                           {/* Photo count badge - bottom right */}
                           <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-950/80 backdrop-blur-md text-white text-sm border border-slate-700/50">
+                            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/90 dark:bg-slate-950/80 backdrop-blur-md text-gray-900 dark:text-white text-sm border border-slate-700/50">
                               <Camera className="h-3.5 w-3.5" />
                               <span className="font-medium">{collection._count.photos}</span>
                             </div>
@@ -518,18 +520,18 @@ export default function HomePage() {
 
                         {/* Content */}
                         <div className="p-6">
-                          <h3 className="text-xl font-bold mb-2 text-white group-hover:text-blue-400 transition-colors line-clamp-2">
+                          <h3 className="text-xl font-bold mb-2 text-gray-900 dark:text-white group-hover:text-blue-400 transition-colors line-clamp-2">
                             {collection.title}
                           </h3>
 
                           {collection.description && (
-                            <p className="text-sm text-slate-400 mb-4 line-clamp-2 leading-relaxed">
+                            <p className="text-sm text-gray-600 dark:text-slate-400 mb-4 line-clamp-2 leading-relaxed">
                               {collection.description}
                             </p>
                           )}
 
                           {/* Meta info */}
-                          <div className="flex items-center gap-4 text-xs text-slate-500 mb-4">
+                          <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-slate-500 mb-4">
                             <div className="flex items-center gap-1.5">
                               <Camera className="h-3.5 w-3.5" />
                               <span>{collection._count.photos} fotos</span>
@@ -550,13 +552,13 @@ export default function HomePage() {
                                 <Badge
                                   key={tag}
                                   variant="outline"
-                                  className="text-xs font-normal border-slate-700 text-slate-400 hover:border-blue-500/50 hover:text-blue-400 transition-colors"
+                                  className="text-xs font-normal border-slate-700 text-gray-600 dark:text-slate-400 hover:border-blue-500/50 hover:text-blue-400 transition-colors"
                                 >
                                   {tag}
                                 </Badge>
                               ))}
                               {collection.tags.length > 3 && (
-                                <Badge variant="outline" className="text-xs font-normal border-slate-700 text-slate-400">
+                                <Badge variant="outline" className="text-xs font-normal border-slate-700 text-gray-600 dark:text-slate-400">
                                   +{collection.tags.length - 3}
                                 </Badge>
                               )}
@@ -574,15 +576,15 @@ export default function HomePage() {
       </section>
 
       {/* Footer - Dark */}
-      <footer className="relative border-t border-slate-800/50 bg-slate-950 backdrop-blur-sm">
+      <footer className="relative border-t border-gray-200 dark:border-slate-800/50 bg-white dark:bg-slate-950 backdrop-blur-sm">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="flex flex-col items-center gap-6">
             {/* Logo */}
             <Link href="/" className="flex items-center gap-3 group">
-              <Camera className="h-6 w-6 text-blue-500 group-hover:rotate-12 transition-transform duration-300" />
+              <Camera className="h-6 w-6 text-blue-600 dark:text-blue-500 group-hover:rotate-12 transition-transform duration-300" />
               <div className="flex flex-col">
-                <span className="text-sm font-bold tracking-tight text-white">RENÉ RIVAROLA</span>
-                <span className="text-xs text-slate-500 tracking-[0.2em] font-light">
+                <span className="text-sm font-bold tracking-tight text-gray-900 dark:text-white">RENÉ RIVAROLA</span>
+                <span className="text-xs text-gray-500 dark:text-slate-500 tracking-[0.2em] font-light">
                   PHOTOGRAPHY
                 </span>
               </div>
@@ -592,7 +594,7 @@ export default function HomePage() {
             <div className="w-32 h-px bg-gradient-to-r from-transparent via-slate-700 to-transparent" />
 
             {/* Copyright */}
-            <p className="text-sm text-slate-500 text-center">
+            <p className="text-sm text-gray-500 dark:text-slate-500 text-center">
               © {new Date().getFullYear()} René Rivarola Photography. Todos los derechos reservados.
             </p>
 

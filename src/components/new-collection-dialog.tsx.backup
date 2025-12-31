@@ -13,7 +13,6 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { CollectionApiResponse } from "@/lib/types"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -25,11 +24,31 @@ const CreateCollectionSchema = z.object({
 
 type CreateCollectionData = z.infer<typeof CreateCollectionSchema>
 
+interface Collection {
+  id: string
+  title: string
+  description?: string
+  slug: string
+  visibility: 'public' | 'private' | 'password_protected'
+  isStarred: boolean
+  isFeatured: boolean
+  tags: string[]
+  createdAt: Date
+  updatedAt: Date
+  coverPhoto?: {
+    id: string
+    thumbnailUrl: string
+    webUrl: string
+  }
+  _count: {
+    photos: number
+  }
+}
 
 interface NewCollectionDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSuccess?: (collection: CollectionApiResponse) => void
+  onSuccess?: (collection: Collection) => void
 }
 
 export function NewCollectionDialog({
@@ -73,8 +92,8 @@ export function NewCollectionDialog({
         throw new Error('Failed to create collection')
       }
 
-      const result = await response.json()
-      onSuccess?.(result.collection)
+      const collection = await response.json()
+      onSuccess?.(collection)
       onOpenChange(false)
       reset()
     } catch (error) {
