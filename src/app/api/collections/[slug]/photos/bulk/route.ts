@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { AuthService } from '@/lib/auth'
+import { AuthService, canAccessResource } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import fs from 'fs/promises'
 import path from 'path'
@@ -39,15 +39,15 @@ export async function DELETE(
     // Get collection to verify ownership
     const collection = await prisma.collection.findUnique({
       where: { slug },
-      select: { id: true, ownerId: true, coverPhotoId: true }
+      select: { id: true, ownerId: true, coverPhotoId: true, owner: { select: { createdById: true } } }
     })
 
     if (!collection) {
       return NextResponse.json({ error: 'Collection not found' }, { status: 404 })
     }
 
-    if (collection.ownerId !== payload.userId && payload.role !== 'admin') {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    const hasAccess = canAccessResource({ userRole: payload.role, userId: payload.userId, resourceOwnerId: collection.ownerId ?? undefined, resourceOwnerCreatedBy: collection.owner?.createdById ?? undefined })
+    if (!hasAccess) {
     }
 
     // Get photos to verify they belong to this collection
