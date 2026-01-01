@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { AuthService } from '@/lib/auth'
+import { AuthService, canAccessResource } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { Prisma } from '@prisma/client'
+
+// ============================================================================
+// SCHEMAS & TYPES
+// ============================================================================
 
 const DesignSchema = z.object({
   gridStyle: z.string().optional(),
@@ -15,7 +20,6 @@ const DesignSchema = z.object({
     x: z.number().min(0).max(100),
     y: z.number().min(0).max(100)
   }).optional(),
-  // Nuevos campos
   coverLayout: z.string().optional(),
   titleSize: z.number().optional(),
   titleColor: z.string().optional(),
@@ -23,7 +27,147 @@ const DesignSchema = z.object({
   customAccentColor: z.string().optional()
 })
 
-// GET /api/collections/[slug]/design - Get collection design settings
+// DRY: Single source of truth for design fields
+const DESIGN_FIELDS_SELECT = {
+  gridStyle: true,
+  gridColumns: true,
+  thumbnailSize: true,
+  gridSpacing: true,
+  navigationStyle: true,
+  typographyStyle: true,
+  colorTheme: true,
+  coverFocalPoint: true,
+  coverLayout: true,
+  titleSize: true,
+  titleColor: true,
+  customBackgroundColor: true,
+  customAccentColor: true,
+} as const
+
+// Design fields type (for objects that only have design fields)
+type DesignFields = {
+  gridStyle: string | null
+  gridColumns: number | null
+  thumbnailSize: string | null
+  gridSpacing: number | null
+  navigationStyle: string | null
+  typographyStyle: string | null
+  colorTheme: string | null
+  coverFocalPoint: Prisma.JsonValue | null
+  coverLayout: string | null
+  titleSize: number | null
+  titleColor: string | null
+  customBackgroundColor: string | null
+  customAccentColor: string | null
+}
+
+// Type for collection query with design fields + permissions
+type CollectionWithDesignAndOwner = {
+  id: string
+  ownerId: string | null
+  owner: { createdById: string | null } | null
+} & DesignFields
+
+// Design settings response type
+type DesignSettings = {
+  gridStyle: string | null
+  gridColumns: number | null
+  thumbnailSize: string | null
+  gridSpacing: number | null
+  navigationStyle: string | null
+  typographyStyle: string | null
+  colorTheme: string | null
+  coverFocalPoint: Prisma.JsonValue | null
+  coverLayout: string | null
+  titleSize: number | null
+  titleColor: string | null
+  customBackgroundColor: string | null
+  customAccentColor: string | null
+}
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+/**
+ * Extract design settings from collection or design-only object
+ * Ensures we only return design-related fields
+ */
+function extractDesignSettings(data: DesignFields): DesignSettings {
+  return {
+    gridStyle: data.gridStyle,
+    gridColumns: data.gridColumns,
+    thumbnailSize: data.thumbnailSize,
+    gridSpacing: data.gridSpacing,
+    navigationStyle: data.navigationStyle,
+    typographyStyle: data.typographyStyle,
+    colorTheme: data.colorTheme,
+    coverFocalPoint: data.coverFocalPoint,
+    coverLayout: data.coverLayout,
+    titleSize: data.titleSize,
+    titleColor: data.titleColor,
+    customBackgroundColor: data.customBackgroundColor,
+    customAccentColor: data.customAccentColor,
+  }
+}
+
+/**
+ * Verify user has access to collection
+ * Uses hierarchical permission system
+ */
+async function verifyCollectionAccess(
+  slug: string,
+  payload: { userId: string; role: string }
+): Promise<CollectionWithDesignAndOwner | null> {
+  
+  const collection = await prisma.collection.findUnique({
+    where: { slug },
+    select: {
+      id: true,
+      ownerId: true,
+      owner: {
+        select: { createdById: true }
+      },
+      ...DESIGN_FIELDS_SELECT
+    }
+  })
+
+  if (!collection) {
+    return null
+  }
+
+  const hasAccess = canAccessResource({
+    userRole: payload.role,
+    userId: payload.userId,
+    resourceOwnerId: collection.ownerId ?? undefined,
+    resourceOwnerCreatedBy: collection.owner?.createdById ?? undefined,
+  })
+
+  if (!hasAccess) {
+    return null
+  }
+
+  return collection
+}
+
+/**
+ * Parse and validate JWT token from request
+ */
+function getAuthToken(request: NextRequest): string | null {
+  const authHeader = request.headers.get('authorization')
+  const bearerToken = authHeader?.replace('Bearer ', '')
+  const cookieToken = request.cookies.get('auth-token')?.value
+  return bearerToken || cookieToken || null
+}
+
+// ============================================================================
+// ROUTE HANDLERS
+// ============================================================================
+
+/**
+ * GET /api/collections/[slug]/design
+ * Retrieve collection design settings
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
@@ -31,13 +175,10 @@ export async function GET(
   try {
     const { slug } = await params
     
-    const authHeader = request.headers.get('authorization')
-    const bearerToken = authHeader?.replace('Bearer ', '')
-    const cookieToken = request.cookies.get('auth-token')?.value
-    const token = bearerToken || cookieToken
-
     console.log(`🎨 GET Design settings for collection: ${slug}`)
 
+    // Authenticate
+    const token = getAuthToken(request)
     if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -47,54 +188,20 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
 
-    // Get collection design settings
-    const collection = await prisma.collection.findUnique({
-      where: { slug },
-      select: {
-        id: true,
-        ownerId: true,
-        gridStyle: true,
-        gridColumns: true,
-        thumbnailSize: true,
-        gridSpacing: true,
-        navigationStyle: true,
-        typographyStyle: true,
-        colorTheme: true,
-        coverFocalPoint: true,
-        coverLayout: true,
-        titleSize: true,
-        titleColor: true,
-        customBackgroundColor: true,
-        customAccentColor: true
-      }
-    })
-
+    // Verify access and get collection
+    const collection = await verifyCollectionAccess(slug, payload)
+    
     if (!collection) {
-      return NextResponse.json({ error: 'Collection not found' }, { status: 404 })
-    }
-
-    if (collection.ownerId !== payload.userId && payload.role !== 'admin') {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+      return NextResponse.json(
+        { error: 'Collection not found or access denied' },
+        { status: 404 }
+      )
     }
 
     console.log('✅ Design settings retrieved')
 
     return NextResponse.json({
-      design: {
-        gridStyle: collection.gridStyle,
-        gridColumns: collection.gridColumns,
-        thumbnailSize: collection.thumbnailSize,
-        gridSpacing: collection.gridSpacing,
-        navigationStyle: collection.navigationStyle,
-        typographyStyle: collection.typographyStyle,
-        colorTheme: collection.colorTheme,
-        coverFocalPoint: collection.coverFocalPoint,
-        coverLayout: collection.coverLayout,
-        titleSize: collection.titleSize,
-        titleColor: collection.titleColor,
-        customBackgroundColor: collection.customBackgroundColor,
-        customAccentColor: collection.customAccentColor
-      }
+      design: extractDesignSettings(collection)
     })
 
   } catch (error) {
@@ -106,7 +213,10 @@ export async function GET(
   }
 }
 
-// PUT /api/collections/[slug]/design - Update collection design settings
+/**
+ * PUT /api/collections/[slug]/design
+ * Update collection design settings
+ */
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
@@ -114,13 +224,10 @@ export async function PUT(
   try {
     const { slug } = await params
     
-    const authHeader = request.headers.get('authorization')
-    const bearerToken = authHeader?.replace('Bearer ', '')
-    const cookieToken = request.cookies.get('auth-token')?.value
-    const token = bearerToken || cookieToken
-
     console.log(`🎨 UPDATE Design settings for collection: ${slug}`)
 
+    // Authenticate
+    const token = getAuthToken(request)
     if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -130,79 +237,46 @@ export async function PUT(
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
 
+    // Parse and validate request body
     const body = await request.json()
     const data = DesignSchema.parse(body)
 
-    // Get collection to verify ownership
-    const collection = await prisma.collection.findUnique({
-      where: { slug },
-      select: { id: true, ownerId: true }
-    })
-
+    // Verify access (this also checks if collection exists)
+    const collection = await verifyCollectionAccess(slug, payload)
+    
     if (!collection) {
-      return NextResponse.json({ error: 'Collection not found' }, { status: 404 })
-    }
-
-    if (collection.ownerId !== payload.userId && payload.role !== 'admin') {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+      return NextResponse.json(
+        { error: 'Collection not found or access denied' },
+        { status: 404 }
+      )
     }
 
     // Update design settings
     const updated = await prisma.collection.update({
       where: { slug },
       data: {
-        gridStyle: body.gridStyle,
-        gridColumns: body.gridColumns ? parseInt(body.gridColumns) : undefined,	
-        thumbnailSize: body.thumbnailSize,
-        gridSpacing: body.gridSpacing ? parseInt(body.gridSpacing) : undefined,
-        navigationStyle: body.navigationStyle,
-        typographyStyle: body.typographyStyle,
-        colorTheme: body.colorTheme,
-        coverFocalPoint: body.coverFocalPoint,
-        coverLayout: body.coverLayout,
-        titleSize: body.titleSize ? parseInt(body.titleSize) : undefined,
-        titleColor: body.titleColor,
-        customBackgroundColor: body.customBackgroundColor,
-        customAccentColor: body.customAccentColor,
+        ...data,
+        // Ensure numeric fields are properly typed
+        gridColumns: data.gridColumns !== undefined 
+          ? parseInt(String(data.gridColumns)) 
+          : undefined,
+        gridSpacing: data.gridSpacing !== undefined 
+          ? parseInt(String(data.gridSpacing)) 
+          : undefined,
+        titleSize: data.titleSize !== undefined 
+          ? parseInt(String(data.titleSize)) 
+          : undefined,
         updatedAt: new Date()
       },
-      select: {
-        gridStyle: true,
-        gridColumns: true,
-        thumbnailSize: true,
-        gridSpacing: true,
-        navigationStyle: true,
-        typographyStyle: true,
-        colorTheme: true,
-        coverFocalPoint: true,
-        coverLayout: true,
-        titleSize: true,
-        titleColor: true,
-        customBackgroundColor: true,
-        customAccentColor: true
-      }
+      select: DESIGN_FIELDS_SELECT
     })
 
-    console.log(`✅ Design settings updated`)
+    console.log('✅ Design settings updated')
 
     return NextResponse.json({
       success: true,
       message: 'Design settings updated successfully',
-      design: {
-        gridStyle: updated.gridStyle,
-        gridColumns: updated.gridColumns,
-        thumbnailSize: updated.thumbnailSize,
-        gridSpacing: updated.gridSpacing,
-        navigationStyle: updated.navigationStyle,
-        typographyStyle: updated.typographyStyle,
-        colorTheme: updated.colorTheme,
-        coverFocalPoint: updated.coverFocalPoint,
-        coverLayout: updated.coverLayout,
-        titleSize: updated.titleSize,
-        titleColor: updated.titleColor,
-        customBackgroundColor: updated.customBackgroundColor,
-        customAccentColor: updated.customAccentColor
-      }
+      design: extractDesignSettings(updated)
     })
 
   } catch (error) {
@@ -222,7 +296,10 @@ export async function PUT(
   }
 }
 
-// POST method - alias for PUT
+/**
+ * POST /api/collections/[slug]/design
+ * Alias for PUT (for compatibility)
+ */
 export async function POST(
   request: NextRequest,
   params: { params: Promise<{ slug: string }> }
