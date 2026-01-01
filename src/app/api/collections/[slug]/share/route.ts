@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { AuthService } from '@/lib/auth'
+import { AuthService, canAccessResource } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { v4 as uuidv4 } from 'uuid'
 import { z } from 'zod'
@@ -45,15 +45,15 @@ export async function POST(
     // Get collection
     const collection = await prisma.collection.findUnique({
       where: { slug },
-      select: { id: true, ownerId: true, title: true }
+      select: { id: true, ownerId: true, title: true, owner: { select: { createdById: true } } }
     })
 
     if (!collection) {
       return NextResponse.json({ error: 'Collection not found' }, { status: 404 })
     }
 
-    if (collection.ownerId !== payload.userId && payload.role !== 'admin') {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    const hasAccess1 = canAccessResource({ userRole: payload.role, userId: payload.userId, resourceOwnerId: collection.ownerId ?? undefined, resourceOwnerCreatedBy: collection.owner?.createdById ?? undefined })
+    if (!hasAccess1) {
     }
 
     // Generate unique access token
@@ -161,15 +161,15 @@ export async function GET(
     // Get collection
     const collection = await prisma.collection.findUnique({
       where: { slug },
-      select: { id: true, ownerId: true }
+      select: { id: true, ownerId: true, owner: { select: { createdById: true } } }
     })
 
     if (!collection) {
       return NextResponse.json({ error: 'Collection not found' }, { status: 404 })
     }
 
-    if (collection.ownerId !== payload.userId && payload.role !== 'admin') {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    const hasAccess2 = canAccessResource({ userRole: payload.role, userId: payload.userId, resourceOwnerId: collection.ownerId ?? undefined, resourceOwnerCreatedBy: collection.owner?.createdById ?? undefined })
+    if (!hasAccess2) {
     }
 
     // Get all share links for this collection
@@ -245,15 +245,15 @@ export async function DELETE(
     // Get collection
     const collection = await prisma.collection.findUnique({
       where: { slug },
-      select: { id: true, ownerId: true }
+      select: { id: true, ownerId: true, owner: { select: { createdById: true } } }
     })
 
     if (!collection) {
       return NextResponse.json({ error: 'Collection not found' }, { status: 404 })
     }
 
-    if (collection.ownerId !== payload.userId && payload.role !== 'admin') {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    const hasAccess3 = canAccessResource({ userRole: payload.role, userId: payload.userId, resourceOwnerId: collection.ownerId ?? undefined, resourceOwnerCreatedBy: collection.owner?.createdById ?? undefined })
+    if (!hasAccess3) {
     }
 
     // Deactivate the share link (soft delete)
