@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { AuthService } from '@/lib/auth'
+import { AuthService, canAccessResource } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import fs from 'fs/promises'
 import path from 'path'
@@ -37,7 +37,8 @@ export async function GET(
             id: true,
             title: true,
             slug: true,
-            ownerId: true
+            ownerId: true,
+            owner: { select: { createdById: true } }
           }
         }
       }
@@ -48,8 +49,8 @@ export async function GET(
     }
 
     // Check ownership
-    if (photo.collection.ownerId !== payload.userId && payload.role !== 'admin') {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    const hasAccessGet = canAccessResource({ userRole: payload.role, userId: payload.userId, resourceOwnerId: photo.collection.ownerId ?? undefined, resourceOwnerCreatedBy: photo.collection.owner?.createdById ?? undefined })
+    if (!hasAccessGet) {
     }
 
     console.log(`✅ Photo found: ${photo.originalFilename}`)
@@ -120,7 +121,8 @@ export async function DELETE(
           select: {
             id: true,
             ownerId: true,
-            coverPhotoId: true
+            coverPhotoId: true,
+            owner: { select: { createdById: true } }
           }
         }
       }
@@ -131,8 +133,8 @@ export async function DELETE(
     }
 
     // Check ownership
-    if (photo.collection.ownerId !== payload.userId && payload.role !== 'admin') {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    const hasAccessDelete = canAccessResource({ userRole: payload.role, userId: payload.userId, resourceOwnerId: photo.collection.ownerId ?? undefined, resourceOwnerCreatedBy: photo.collection.owner?.createdById ?? undefined })
+    if (!hasAccessDelete) {
     }
 
     // Delete physical files
