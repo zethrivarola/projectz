@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import Masonry from 'react-masonry-css'
 import { Button } from "@/components/ui/button"
+import { ShareCollectionDialog } from "@/components/share-collection-dialog"
 import {
   Download,
   Heart,
@@ -98,10 +99,11 @@ export function CollectionPreview({ slug, token, isAdminView = false }: Collecti
   const [rotation, setRotation] = useState(0)
 
   const [favorites, setFavorites] = useState<Set<string>>(new Set())
+  const [showShareDialog, setShowShareDialog] = useState(false)
   const [selectedPhotos, setSelectedPhotos] = useState<Set<string>>(new Set())
   const [showFavorites, setShowFavorites] = useState(false)
   const [downloadingFavorites, setDownloadingFavorites] = useState(false)
-const [showPasswordDialog, setShowPasswordDialog] = useState(false)
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false)
   const [password, setPassword] = useState('')
   const [passwordError, setPasswordError] = useState('')  
   const [currentUser, setCurrentUser] = useState<{ id: string; role: string } | null>(null)
@@ -1038,22 +1040,26 @@ pollJobStatus(data.jobId);
   setDownloadJobStatus('idle');
 }
 }
-
 const handleShare = () => {
+  // Si es owner o admin, abrir modal Enhanced
+  if (isOwner || isAdmin) {
+    setShowShareDialog(true)
+    return
+  }
+
+  // Para visitantes, usar Web Share API
   const publicUrl = `${window.location.origin}/collections/${slug}`
 
   if (navigator.share) {
     navigator.share({
       title: collection?.title,
-      text: `Check out this photo collection: ${collection?.title}`,
+      text: `Mira esta colección de fotos: ${collection?.title}`,
       url: publicUrl
     }).catch(console.error)
   } else {
-    navigator.clipboard.writeText(publicUrl).then(() => {
-      alert('Collection link copied to clipboard!')
-    }).catch(() => {
-      alert('Unable to copy link. Please copy the URL manually.')
-    })
+    // Fallback: copiar al portapapeles
+    navigator.clipboard.writeText(publicUrl)
+    alert('Link copiado al portapapeles')
   }
 }
 
@@ -1964,6 +1970,19 @@ handleDownloadAllProfessional()
             <p>← → Navigate • +/- Zoom • R Rotate • ESC Close</p>
           </div>
         </div>
+      )}
+{/* Share Dialog - Enhanced System */}
+      {(isOwner || isAdmin) && collection && (
+        <ShareCollectionDialog
+          open={showShareDialog}
+          onOpenChange={setShowShareDialog}
+          collection={{
+            id: collection.id,
+            title: collection.title,
+            slug: collection.slug,
+            photoCount: photos.length
+          }}
+        />
       )}
     </div>
   )
