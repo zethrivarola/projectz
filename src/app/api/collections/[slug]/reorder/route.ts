@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { AuthService } from '@/lib/auth'
+import { AuthService, canAccessResource } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import type { Prisma } from '@prisma/client'
 
-function isAdmin(role: string): boolean {
-  return role === 'SUPER_ADMIN'
-}
 
 const ReorderSchema = z.object({
   photoOrders: z.array(z.object({
@@ -42,7 +39,8 @@ export async function PUT(
 
     // Find the collection by slug
     const collection = await prisma.collection.findUnique({
-      where: { slug }
+      where: { slug },
+      select: { id: true, title: true, ownerId: true, owner: { select: { createdById: true } } }
     })
 
     if (!collection) {
@@ -50,8 +48,8 @@ export async function PUT(
     }
 
     // Check ownership or admin
-    const userIsAdmin = isAdmin(payload.role)
-    if (collection.ownerId !== payload.userId && !userIsAdmin) {
+    const hasAccess = canAccessResource({ userRole: payload.role, userId: payload.userId, resourceOwnerId: collection.ownerId ?? undefined, resourceOwnerCreatedBy: collection.owner?.createdById ?? undefined })
+    if (!hasAccess) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
