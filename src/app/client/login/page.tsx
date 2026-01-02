@@ -47,7 +47,7 @@ export default function ClientLoginPage() {
       }))
 
       // Redirigir a dashboard del cliente
-      router.push("/client/dashboard")
+      router.push("/client/welcome")
       router.refresh()
     } catch (error) {
       console.error("Login error:", error)
