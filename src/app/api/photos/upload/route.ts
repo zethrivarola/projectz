@@ -1,6 +1,6 @@
 // src/app/api/photos/upload/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import { AuthService } from '@/lib/auth'
+import { AuthService, canAccessResource } from '@/lib/auth'
 import { RawProcessor } from '@/lib/raw-processor'
 import sharp from 'sharp'
 import path from 'path'
@@ -64,13 +64,13 @@ if (!isCommonImage && !isRawByExtension) {
 }
 
     // === Verificar colección existe y permisos ===
-    const collection = await prisma.collection.findUnique({ where: { id: collectionId } })
+    const collection = await prisma.collection.findUnique({ where: { id: collectionId }, select: { id: true, ownerId: true, coverPhotoId: true, owner: { select: { createdById: true } } } })
     if (!collection) return NextResponse.json({ error: 'Collection not found' }, { status: 404 })
 
     // payload.userId debe existir en tu token
-    if (collection.ownerId !== payload.userId && payload.role !== 'SUPER_ADMIN') {
-      // si tienes roles distintos adapta esta validación
-      return NextResponse.json({ error: 'Access denied - not owner' }, { status: 403 })
+    const hasAccess = canAccessResource({ userRole: payload.role, userId: payload.userId, resourceOwnerId: collection.ownerId ?? undefined, resourceOwnerCreatedBy: collection.owner?.createdById ?? undefined })
+    if (!hasAccess) {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 })
     }
 
     // === Preparar nombres y carpetas ===
