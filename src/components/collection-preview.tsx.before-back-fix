@@ -124,8 +124,8 @@ const [downloadInfo, setDownloadInfo] = useState<{
   const [touchStart, setTouchStart] = useState(0)
   const [touchEnd, setTouchEnd] = useState(0)
 
-  const backUrl = isAdminView ? `/admin/collections/${slug}` : '/'
-  const backLabel = isAdminView ? 'Gestión' : 'Home'
+  const backUrl = isAdminView ? '/admin' : '/'
+  const backLabel = isAdminView ? 'Admin' : 'Home'
   const fetchCollection = useCallback(async () => {
     try {
       setLoading(true)

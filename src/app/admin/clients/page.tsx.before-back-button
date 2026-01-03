@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Users, Mail, Calendar, Folder, Trash2, Edit, Eye, Key, EyeOff, ArrowLeft } from 'lucide-react'
+import { Plus, Users, Mail, Calendar, Folder, Trash2, Edit, Eye, Key, EyeOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -179,16 +179,6 @@ export default function ClientsPage() {
 
   return (
     <div className="container mx-auto p-6 max-w-7xl">
-      {/* Back Button */}
-      <Button 
-        variant="ghost" 
-        onClick={() => router.push('/admin')} 
-        className="mb-6 hover:bg-slate-100"
-      >
-        <ArrowLeft className="h-4 w-4 mr-2" />
-        Volver al Dashboard
-      </Button>
-
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>

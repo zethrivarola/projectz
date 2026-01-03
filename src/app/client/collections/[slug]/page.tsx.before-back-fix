@@ -118,8 +118,8 @@ export default function ClientCollectionPage() {
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50">
         <div className="text-center">
           <p className="text-red-600 mb-4">{error || 'Colección no encontrada'}</p>
-          <Button onClick={() => router.back()}>
-            Volver
+          <Button onClick={() => router.push('/client/dashboard')}>
+            Volver al Dashboard
           </Button>
         </div>
       </div>
@@ -139,7 +139,7 @@ export default function ClientCollectionPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => router.back()}
+                onClick={() => router.push('/client/dashboard')}
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Volver

@@ -293,6 +293,8 @@ export default function AdminCollectionPage() {
   const slug = params.slug as string
   
   const [collection, setCollection] = useState<Collection | null>(null)
+  const backUrl = collection?.ownerId ? `/admin/clients/${collection.ownerId}` : "/admin"
+  const backLabel = collection?.ownerId ? "Volver al Cliente" : "Back to Dashboard"
   // const [photos, setPhotos] - REMOVED (usando sortedPhotos del hook) = useState<Photo[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -540,10 +542,12 @@ const togglePhotoSelection = (photoId: string) => {
             <p className="text-muted-foreground mb-4">
               {error || 'This collection could not be loaded.'}
             </p>
-            <Button onClick={() => router.back()}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Volver
-            </Button>
+            <Link href={backUrl}>
+              <Button>
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                {backLabel}
+              </Button>
+            </Link>
           </div>
         </div>
       </AppLayout>
@@ -929,10 +933,12 @@ return (
           <div className="absolute inset-0 bg-black/40"></div>
 
           <div className="absolute top-6 left-6 z-20">
-            <Button onClick={() => router.back()} size="sm" variant="outline" className="bg-white/20 backdrop-blur border-white/30 text-white hover:bg-white/30">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Volver
-            </Button>
+            <Link href={backUrl}>
+              <Button size="sm" variant="outline" className="bg-white/20 backdrop-blur border-white/30 text-white hover:bg-white/30">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                {backLabel}
+              </Button>
+            </Link>
           </div>
 
           <div className="relative z-10 text-center">
