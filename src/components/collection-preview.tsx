@@ -217,24 +217,60 @@ const stored = localStorage.getItem(`favorites_${slug || token}`)
 
   // Obtener usuario actual y verificar permisos
   useEffect(() => {
-    const userStr = localStorage.getItem('user')
-    const token = localStorage.getItem('auth-token')
-    
-    if (userStr && token) {
+    const fetchCurrentUser = async () => {
+      const token = localStorage.getItem('auth-token')
+      
+      if (!token) {
+        return
+      }
+
+      // Primero intentar desde localStorage (rápido)
+      const userStr = localStorage.getItem('user')
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr)
+          setCurrentUser(user)
+          setIsAdmin(user.role === 'SUPER_ADMIN' || user.role === 'PHOTOGRAPHER')
+          return
+        } catch (error) {
+          console.error('Error parsing user from localStorage:', error)
+        }
+      }
+
+      // Si no hay user en localStorage, hacer fetch a /api/auth/me
       try {
-        const user = JSON.parse(userStr)
-        setCurrentUser(user)
-        setIsAdmin(user.role === 'SUPER_ADMIN' || user.role === 'PHOTOGRAPHER')
+        const response = await fetch('/api/auth/me', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          if (data.authenticated && data.user) {
+            setCurrentUser(data.user)
+            setIsAdmin(data.user.role === 'SUPER_ADMIN' || data.user.role === 'PHOTOGRAPHER')
+            // Opcionalmente guardar en localStorage para cache
+            localStorage.setItem('user', JSON.stringify(data.user))
+          }
+        }
       } catch (error) {
-        console.error('Error parsing user:', error)
+        console.error('Error fetching current user:', error)
       }
     }
+
+    fetchCurrentUser()
   }, [])
 
   // Verificar si es owner cuando se carga la colección
   useEffect(() => {
     if (collection && currentUser) {
-      setIsOwner(collection.ownerId === currentUser.id)
+console.log('🔍 DEBUG isOwner:', {
+  collectionOwnerId: collection.ownerId,
+  currentUserId: currentUser.id,
+  matches: collection.ownerId === currentUser.id
+})
+setIsOwner(collection.ownerId === currentUser.id)
     }
   }, [collection, currentUser])
 
@@ -1976,6 +2012,7 @@ handleDownloadAllProfessional()
         <ShareCollectionDialog
           open={showShareDialog}
           onOpenChange={setShowShareDialog}
+          variant={isAdmin ? 'admin' : 'client'}
           collection={{
             id: collection.id,
             title: collection.title,

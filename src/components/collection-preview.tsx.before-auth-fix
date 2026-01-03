@@ -1981,6 +1981,7 @@ handleDownloadAllProfessional()
         <ShareCollectionDialog
           open={showShareDialog}
           onOpenChange={setShowShareDialog}
+          variant={isAdmin ? 'admin' : 'client'}
           collection={{
             id: collection.id,
             title: collection.title,

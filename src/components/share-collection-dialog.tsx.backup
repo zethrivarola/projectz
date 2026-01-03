@@ -53,7 +53,6 @@ interface ShareCollectionDialogProps {
     slug: string
     photoCount?: number
   }
-variant?: 'admin' | 'client'
 }
 
 interface ShareLink {
@@ -75,8 +74,7 @@ interface ShareLink {
 export function ShareCollectionDialog({
   open,
   onOpenChange,
-  collection,
-  variant = 'admin'  // ← AGREGAR ESTA LÍNEA
+  collection
 }: ShareCollectionDialogProps) {
   const [isLoading, setIsLoading] = useState(false)
 const [shareLinks, setShareLinks] = useState<ShareLink[]>([])
@@ -100,11 +98,6 @@ const [showCreateForm, setShowCreateForm] = useState(false)
       message: '',
     }
   })
-// Modo client: expiración fija de 24h
-  const isClientMode = variant === 'client'
-  const defaultExpiresAt = isClientMode 
-    ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-    : undefined
 
   const visibility = watch('visibility')
 
@@ -145,10 +138,7 @@ loadExistingShares()
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-body: JSON.stringify({
-  ...data,
-  expiresAt: isClientMode ? defaultExpiresAt : data.expiresAt
-})
+        body: JSON.stringify(data),
       })
 
       if (!response.ok) {
@@ -401,68 +391,6 @@ return (
 
         {/* Formulario de Crear Nuevo Link */}
         {showCreateForm && (
-          isClientMode ? (
-            /* UI SIMPLIFICADA PARA CLIENTES */
-            <>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
-                Crea un link único para compartir. Expira automáticamente en 24 horas.
-              </div>
-
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                {/* Toggle contraseña */}
-                <div className="space-y-3">
-                  <Label>Protección (Opcional)</Label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Card
-                      className={`cursor-pointer ${visibility === 'public' ? 'ring-2 ring-primary' : ''}`}
-                      onClick={() => setValue('visibility', 'public')}
-                    >
-                      <CardContent className="p-4 text-center">
-                        <Globe className="h-6 w-6 mx-auto mb-2" />
-                        <h4 className="font-medium text-sm">Sin Contraseña</h4>
-                      </CardContent>
-                    </Card>
-                    <Card
-                      className={`cursor-pointer ${visibility === 'password_protected' ? 'ring-2 ring-primary' : ''}`}
-                      onClick={() => setValue('visibility', 'password_protected')}
-                    >
-                      <CardContent className="p-4 text-center">
-                        <Lock className="h-6 w-6 mx-auto mb-2" />
-                        <h4 className="font-medium text-sm">Con PIN</h4>
-                      </CardContent>
-                    </Card>
-                  </div>
-                </div>
-
-                {visibility === 'password_protected' && (
-                  <div className="space-y-2">
-                    <Label>PIN de 4 dígitos</Label>
-                    <Input
-                      type="text"
-                      placeholder="1234"
-                      maxLength={4}
-                      {...register('password')}
-                      className="text-center text-lg tracking-widest"
-                    />
-                  </div>
-                )}
-
-                <div className="bg-gray-50 border rounded-lg p-3 text-sm">
-                  ⏰ Expira en 24 horas
-                </div>
-
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => { setShowCreateForm(false); reset(); }}>
-                    Cancelar
-                  </Button>
-                  <Button type="submit" disabled={isLoading}>
-                    {isLoading ? 'Creando...' : 'Crear Link'}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </>
-          ) : (
-            /* UI COMPLETA PARA ADMIN */
           <>
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex gap-2">
               <Info className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
@@ -610,7 +538,6 @@ return (
               </DialogFooter>
             </form>
           </>
-        )
         )}
       </div>
     </DialogContent>
