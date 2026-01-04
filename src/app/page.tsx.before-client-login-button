@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
 import { motion, useScroll, useTransform } from "framer-motion"
 import { Camera, Calendar, ArrowRight, Loader2, Sparkles } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
@@ -148,14 +147,7 @@ export default function HomePage() {
                 </p>
               </div>
             </Link>
-            <div className="flex items-center gap-4">
-              <Link href="/client/login">
-                <Button variant="ghost" size="sm" className="text-sm hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                  ¿Eres cliente? Inicia sesión
-                </Button>
-              </Link>
-              <ThemeToggle />
-            </div>
+            <ThemeToggle />
           </div>
         </div>
       </motion.header>

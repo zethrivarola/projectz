@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Camera, LogOut, Loader2, Image, ArrowLeft } from "lucide-react"
+import { Camera, LogOut, Loader2, Image } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 interface User {
@@ -110,16 +110,6 @@ const [user, setUser] = useState<User | null>(null)
                 )}
               </div>
             </div>
-            <Link href="/client/welcome">
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                Volver a Home
-              </Button>
-            </Link>
             <Button
               onClick={handleLogout}
               disabled={loggingOut}

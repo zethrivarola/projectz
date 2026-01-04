@@ -987,7 +987,7 @@ return (
                   Design
                 </Button>
               </Link>
-              <Link href={`/admin/collections/${slug}/preview`}>
+              <Link href={`/admin/collections/${slug}/preview`} target="_blank">
                 <Button variant="outline" className="gap-2">
                   <Eye className="h-4 w-4" />
                   Preview

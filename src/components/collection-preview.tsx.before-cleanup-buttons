@@ -124,7 +124,8 @@ const [downloadInfo, setDownloadInfo] = useState<{
   const [touchStart, setTouchStart] = useState(0)
   const [touchEnd, setTouchEnd] = useState(0)
 
-  const backLabel = 'Volver'
+  const backUrl = isAdminView ? `/admin/collections/${slug}` : '/'
+  const backLabel = isAdminView ? 'Gestión' : 'Home'
   const fetchCollection = useCallback(async () => {
     try {
       setLoading(true)
@@ -1231,10 +1232,12 @@ if (showPasswordDialog) {
           <Camera className="h-16 w-16 mx-auto mb-4 opacity-50" />
           <h2 className="text-xl font-semibold mb-2">Collection Not Available</h2>
           <p className="text-gray-600 mb-4">{error}</p>
-            <Button onClick={() => router.back()}>
+          <Link href={backUrl}>
+            <Button>
               <ArrowLeft className="h-4 w-4 mr-2" />
-              {backLabel}
+              Back to {backLabel}
             </Button>
+          </Link>
         </div>
       </div>
     )
@@ -1270,10 +1273,21 @@ return (
 
         <div className="absolute top-4 left-4 right-4 z-20 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-              <Button onClick={() => router.back()} size="sm" variant="outline" className="bg-white/20 backdrop-blur border-white/30 text-white hover:bg-white/30 text-xs">
+            <Link href={backUrl}>
+              <Button size="sm" variant="outline" className="bg-white/20 backdrop-blur border-white/30 text-white hover:bg-white/30 text-xs">
                 <ArrowLeft className="h-3 w-3 mr-1" />
                 <span className="hidden sm:inline">{backLabel}</span>
               </Button>
+            </Link>
+
+            {isAdminView && (
+              <Link href={`/admin/collections/${slug}`}>
+                <Button size="sm" variant="outline" className="bg-white/20 backdrop-blur border-white/30 text-white hover:bg-white/30 text-xs">
+                  <Settings className="h-3 w-3 sm:mr-1" />
+                  <span className="hidden sm:inline">Manage</span>
+                </Button>
+              </Link>
+            )}
           </div>
 
           <Button onClick={handleShare} size="sm" variant="outline" className="bg-white/20 backdrop-blur border-white/30 text-white hover:bg-white/30 text-xs">

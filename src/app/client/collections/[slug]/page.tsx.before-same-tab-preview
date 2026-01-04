@@ -137,7 +137,7 @@ export default function ClientCollectionPage() {
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-4">
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
                 onClick={() => router.back()}
               >
@@ -156,6 +156,7 @@ export default function ClientCollectionPage() {
             </div>
             <Link
               href={`/collections/${slug}?preview=true`}
+              target="_blank"
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
               <ExternalLink className="h-4 w-4" />
