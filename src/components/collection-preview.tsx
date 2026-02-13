@@ -6,6 +6,7 @@ import Link from "next/link"
 import Masonry from 'react-masonry-css'
 import { Button } from "@/components/ui/button"
 import { ShareCollectionDialog } from "@/components/share-collection-dialog"
+import { Breadcrumbs } from "@/components/breadcrumbs"
 import {
   Download,
   Heart,
@@ -26,7 +27,7 @@ import {
   Settings,
   Loader2,
   Eye,
-  EyeOff,
+  EyeOff, ExternalLink
 } from "lucide-react"
 
 interface CollectionPreviewProps {
@@ -123,7 +124,6 @@ const [downloadInfo, setDownloadInfo] = useState<{
 
   const [touchStart, setTouchStart] = useState(0)
   const [touchEnd, setTouchEnd] = useState(0)
-
   const backLabel = 'Volver'
   const fetchCollection = useCallback(async () => {
     try {
@@ -1269,12 +1269,12 @@ return (
         <div className="absolute inset-0 bg-black/40"></div>
 
         <div className="absolute top-4 left-4 right-4 z-20 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-              <Button onClick={() => router.back()} size="sm" variant="outline" className="bg-white/20 backdrop-blur border-white/30 text-white hover:bg-white/30 text-xs">
-                <ArrowLeft className="h-3 w-3 mr-1" />
-                <span className="hidden sm:inline">{backLabel}</span>
+            <Link href={"/"}>
+              <Button size="sm" variant="outline" className="bg-white/20 backdrop-blur-md border border-white/30 text-white hover:bg-white/30">
+                <ExternalLink className="h-3 w-3 mr-2" />
+                Home
               </Button>
-          </div>
+            </Link>
 
           <Button onClick={handleShare} size="sm" variant="outline" className="bg-white/20 backdrop-blur border-white/30 text-white hover:bg-white/30 text-xs">
             <Share2 className="h-3 w-3 sm:mr-1" />

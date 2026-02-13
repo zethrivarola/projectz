@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation"
 import Link from "next/link"
 import { Camera, Eye, EyeOff, ExternalLink, ArrowLeft, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Breadcrumbs } from "@/components/breadcrumbs"
 
 interface Photo {
   id: string
@@ -136,14 +137,10 @@ export default function ClientCollectionPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => router.back()}
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Volver
-              </Button>
+              <Breadcrumbs items={[
+                { label: "Mis Galerías", href: "/client/dashboard" },
+                { label: collection.title, href: `/client/collections/${collection.slug}` }
+              ]} />
               <div className="flex items-center gap-3">
                 <Camera className="h-5 w-5 text-blue-600" />
                 <div>
@@ -156,6 +153,7 @@ export default function ClientCollectionPage() {
             </div>
             <Link
               href={`/collections/${slug}?preview=true`}
+              target="_blank"
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
               <ExternalLink className="h-4 w-4" />

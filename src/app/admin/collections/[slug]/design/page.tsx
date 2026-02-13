@@ -32,6 +32,7 @@ import {
 } from "lucide-react"
 import Masonry from 'react-masonry-css'
 import { ChevronLeft, Monitor, Smartphone } from "lucide-react"
+import { Breadcrumbs } from "@/components/breadcrumbs"
 
 interface Collection {
   id: string
@@ -379,9 +380,6 @@ const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop')
         <div className="flex items-center justify-center h-full">
           <div className="text-center">
             <h2 className="text-xl font-semibold mb-2">Collection Not Found</h2>
-            <Link href="/admin">
-              <Button variant="outline">Back to Dashboard</Button>
-            </Link>
           </div>
         </div>
       </AppLayout>
@@ -393,15 +391,11 @@ return (
     {/* Top Bar */}
     <div className="border-b bg-white px-6 py-3 flex items-center justify-between shrink-0">
       <div className="flex items-center gap-4">
-        <Link href="/admin">
-          <Button variant="ghost" size="sm">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            {collection.title}
-          </Button>
-        </Link>
-        <Badge variant={autoSave ? "default" : "secondary"} className="text-xs">
-          {autoSave ? "Auto-save" : "Manual"}
-        </Badge>
+        <Breadcrumbs items={[
+          { label: "Colecciones", href: "/admin" },
+          { label: collection.title, href: `/admin/collections/${collection.slug}` },
+          { label: "Diseño", href: `/admin/collections/${collection.slug}/design` }
+        ]} />
       </div>
 
       <div className="flex items-center gap-2">

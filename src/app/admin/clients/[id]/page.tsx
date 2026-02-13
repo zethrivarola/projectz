@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { ShareCollectionDialog } from '@/components/share-collection-dialog'
+import { Breadcrumbs } from "@/components/breadcrumbs"
 
 interface Collection {
   id: string
@@ -279,6 +280,11 @@ export default function ClientDetailPage() {
           <ArrowLeft className="h-4 w-4 mr-2" />
           Volver a Clientes
         </Button>
+
+      <Breadcrumbs items={[
+        { label: "Clientes", href: "/admin/clients" },
+        { label: client.name, href: `/admin/clients/${client.id}` }
+      ]} />
 
         <div className="flex items-center justify-between">
           <div>

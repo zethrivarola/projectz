@@ -245,33 +245,11 @@ export default function HomePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.2 }}
           >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.6, delay: 0.4 }}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/10 border border-blue-500/30 mb-8"
-            >
-              <Sparkles className="h-4 w-4 text-blue-400" />
-              <span className="text-sm font-medium text-blue-300">Portfolio Profesional</span>
-            </motion.div>
 
-            <h2 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-6 text-gray-900 dark:text-white">
-              Capturando momentos,
-              <br />
-              <span className="bg-gradient-to-r from-blue-400 via-cyan-400 to-blue-500 bg-clip-text text-transparent">
-                creando recuerdos
-              </span>
-            </h2>
 
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.8, delay: 0.6 }}
-              className="text-lg sm:text-xl text-gray-600 dark:text-slate-400 max-w-2xl mx-auto mb-8 font-light leading-relaxed"
-            >
-              Explora mi colección de fotografías que capturan historias únicas,
-              emociones genuinas y momentos inolvidables
-            </motion.p>
+
+
+
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -607,9 +585,7 @@ export default function HomePage() {
             </p>
 
             {/* Subtle tagline */}
-            <p className="text-xs text-slate-600 text-center font-light">
-              Capturando momentos • Creando recuerdos
-            </p>
+            <p className="text-xs text-slate-600 text-center font-light"></p>
           </div>
         </div>
 

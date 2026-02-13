@@ -338,10 +338,7 @@ export default function ClientWelcomePage() {
 
             <h2 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-6 text-gray-900 dark:text-white">
               ¡Bienvenido {welcomeName}!
-              <br />
-              <span className="bg-gradient-to-r from-blue-400 via-cyan-400 to-blue-500 bg-clip-text text-transparent">
-                Tus momentos especiales en un solo lugar
-              </span>
+              
             </h2>
 
             <motion.p
@@ -427,9 +424,7 @@ export default function ClientWelcomePage() {
               <h3 className="text-3xl sm:text-4xl font-bold mb-2 text-gray-900 dark:text-white">
                 ⭐ Galerías Destacadas
               </h3>
-              <p className="text-gray-600 dark:text-slate-400 text-lg">
-                Tus momentos más especiales
-              </p>
+              
             </motion.div>
           </div>
 
@@ -709,9 +704,7 @@ export default function ClientWelcomePage() {
             </p>
 
             {/* Subtle tagline */}
-            <p className="text-xs text-slate-600 text-center font-light">
-              Tus momentos especiales en un solo lugar
-            </p>
+            
           </div>
         </div>
 

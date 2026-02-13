@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Camera, LogOut, Loader2, Image, ArrowLeft } from "lucide-react"
+import { Camera, LogOut, Loader2, Image } from "lucide-react"
+import { Breadcrumbs } from "@/components/breadcrumbs"
 import { Button } from "@/components/ui/button"
 
 interface User {
@@ -104,22 +105,15 @@ const [user, setUser] = useState<User | null>(null)
                 <Camera className="h-5 w-5 text-white" />
               </div>
               <div>
+                <Breadcrumbs items={[
+                  { label: "Mis Galerías", href: "/client/dashboard" }
+                ]} />
                 <h1 className="text-lg font-bold text-gray-900">Mis Galerías</h1>
                 {user && (
                   <p className="text-xs text-gray-500">{user.name || user.email}</p>
                 )}
               </div>
             </div>
-            <Link href="/client/welcome">
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                Volver a Home
-              </Button>
-            </Link>
             <Button
               onClick={handleLogout}
               disabled={loggingOut}

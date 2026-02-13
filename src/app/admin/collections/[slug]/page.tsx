@@ -11,8 +11,7 @@ import {
   Heart,
   Camera,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
+  ChevronLeft, ChevronRight,
   X,
   ArrowLeft,
   Check,
@@ -47,11 +46,17 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { usePhotoReorder } from '@/hooks/usePhotoReorder'
+import { Breadcrumbs } from "@/components/breadcrumbs"
 
 interface Collection {
   id: string
   title: string
   description?: string
+  owner?: {
+    id: string
+    name: string
+    email: string
+  }
   slug: string
   ownerId?: string | null
   coverPhoto?: {
@@ -857,6 +862,21 @@ return (
     <div 
       className="min-h-screen flex flex-col relative"
     >
+      {/* Breadcrumbs dinámicos */}
+      {collection && (
+        collection.owner ? (
+          <Breadcrumbs items={[
+            { label: "Clientes", href: "/admin/clients" },
+            { label: collection.owner.name, href: `/admin/clients/${collection.owner.id}` },
+            { label: collection.title, href: `/admin/collections/${slug}` }
+          ]} />
+        ) : (
+          <Breadcrumbs items={[
+            { label: "Colecciones", href: "/admin" },
+            { label: collection.title, href: `/admin/collections/${slug}` }
+          ]} />
+        )
+      )}
 {/* Indicador de guardado */}
         {isSaving && (
           <div className="fixed top-4 right-4 z-50 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 animate-pulse">
@@ -928,13 +948,6 @@ return (
 
           <div className="absolute inset-0 bg-black/40"></div>
 
-          <div className="absolute top-6 left-6 z-20">
-            <Button onClick={() => router.back()} size="sm" variant="outline" className="bg-white/20 backdrop-blur border-white/30 text-white hover:bg-white/30">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Volver
-            </Button>
-          </div>
-
           <div className="relative z-10 text-center">
             <h1
               className="font-bold tracking-wide mb-8"
@@ -987,7 +1000,7 @@ return (
                   Design
                 </Button>
               </Link>
-              <Link href={`/admin/collections/${slug}/preview`}>
+              <Link href={`/admin/collections/${slug}/preview`} target="_blank">
                 <Button variant="outline" className="gap-2">
                   <Eye className="h-4 w-4" />
                   Preview
